@@ -188,14 +188,14 @@ function initGame(){
   var sz=Math.round(45*scaleF);
   buildAmandaCache(sz); // always rebuild to ensure image loaded
   ship={x:W*.22,y:H/2,w:sz,h:sz,vy:0,dead:false};
-  gravity=.4435*scaleF;flapPower=-9.5*scaleF;
+  gravity=.4657*scaleF;flapPower=-9.975*scaleF;
   obstacles=[];coins=[];particles=[];obstTimer=0;
-  obstInterval=Math.floor(125/scaleF*.78);
+  obstInterval=Math.floor(125/scaleF*.742);
   obstTimer=-obstInterval; // grace period
   score=0;obstacleScore=0;coinScore=0;
   combo=0;comboTimer=0;comboPopup.active=false;
   shieldActive=false;shieldTimer=0;magnetActive=false;magnetTimer=0;
-  announce100.active=false;announce100.alpha=0;powerUps=[];
+  announce100.active=false;announce100.alpha=0;powerUps=[];_lastMilestone=0;
   msgPopup.active=false;
   gameReady=false;tilt=0;lastTime=0;lastMsgScore=0;
   // Increment totalGames here (correct place — game is starting)
@@ -307,6 +307,7 @@ function drawCoins(spd,dt){
       score+=pts;totalCoinsEver++;
       localStorage.setItem("amandaTotalCoins",totalCoinsEver);
       document.getElementById("scoreDisplay").textContent=score;
+      checkScoreMilestones();
       sndCoin();spawnH(c.x,c.y,6);
       if(combo>=5)showComboPopup(combo,pts);
       coins.splice(i,1);continue;
@@ -498,6 +499,15 @@ function drawAnnounce100(){
   if(Math.random()<.3)spawnH(Math.random()*W,Math.random()*H*.5,3);
 }
 
+// ── Score milestone checks ────────────────────────────────────
+var _lastMilestone=0;
+function checkScoreMilestones(){
+  if(score>=100&&_lastMilestone<100){
+    _lastMilestone=100;
+    announce100.active=true;announce100.alpha=1;
+  }
+}
+
 // ── Game Loop ─────────────────────────────────────────────────
 function gameLoop(ts){
   if(!loopActive)return;
@@ -557,7 +567,7 @@ function gameLoop(ts){
     }
 
     var ramp=Math.max(0,score-40);
-    var spd=(2.449+ramp*.015)*scaleF;
+    var spd=(2.571+ramp*.01575)*scaleF;
 
     for(var i=obstacles.length-1;i>=0;i--){
       var ob=obstacles[i];ob.x-=spd*dt;
@@ -590,11 +600,10 @@ function gameLoop(ts){
         score+=pts;totalObstaclesEver++;
         localStorage.setItem("amandaTotalObs",totalObstaclesEver);
         document.getElementById("scoreDisplay").textContent=score;
+        checkScoreMilestones();
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
         if(combo>=5)showComboPopup(combo,pts);
-        if(obstacleScore===100&&!announce100.active){
-          announce100.active=true;announce100.alpha=1;
-        }
+
         if(obstacleScore%10===0&&obstacleScore!==lastMsgScore){
           lastMsgScore=obstacleScore;
           triggerMsg(MSGS[Math.floor(Math.random()*MSGS.length)]);
