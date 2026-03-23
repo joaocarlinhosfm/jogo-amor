@@ -1,4 +1,13 @@
+// ── Ship photos (random per game) ────────────────────────────
+var SHIP_PHOTOS=["amanda.jpg","photo2.jpg","photo3.jpg"];
 var amandaImg=new Image();
+var _currentPhoto="amanda.jpg";
+function pickRandomPhoto(){
+  _currentPhoto=SHIP_PHOTOS[Math.floor(Math.random()*SHIP_PHOTOS.length)];
+  amandaImg.src=_currentPhoto;
+  document.getElementById("amandaHeroImg").src=_currentPhoto;
+  amandaCache=null; // force cache rebuild
+}
 amandaImg.src="amanda.jpg";
 document.getElementById("amandaHeroImg").src="amanda.jpg";
 
@@ -314,7 +323,8 @@ function resize(){W=Math.min(window.innerWidth,430);H=window.innerHeight;canvas.
 function initGame(){
   resize();scaleF=H/700;
   var sz=Math.round(45*scaleF);
-  buildAmandaCache(sz); // always rebuild to ensure image loaded
+  pickRandomPhoto(); // random photo per game
+  buildAmandaCache(sz);
   ship={x:W*.22,y:H/2,w:sz,h:sz,vy:0,dead:false};
   gravity=.4657*scaleF;flapPower=-9.975*scaleF;
   obstacles=[];coins=[];particles=[];obstTimer=0;
@@ -879,7 +889,7 @@ window.addEventListener("load",function(){
   });
 });
 
-amandaImg.onload=function(){buildAmandaCache(Math.round(45*H/700)||45);};
+amandaImg.onload=function(){buildAmandaCache(amandaCacheSize||Math.round(45*H/700)||45);};
 if(amandaImg.complete&&amandaImg.naturalWidth)buildAmandaCache(Math.round(45*H/700)||45);
 resize();
 window.addEventListener("resize",function(){pipeCache={};_coinR=0;_coinImg=null;if(gameState==="playing")initGame();else resize();});
