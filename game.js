@@ -278,7 +278,7 @@ function buildCoinCanvas(r){
 function getCoinImg(r){if(r!==_coinR){_coinR=r;_coinImg=buildCoinCanvas(r);}return _coinImg;}
 
 function spawnCoin(ob){
-  coins.push({x:ob.x+ob.w/2,y:ob.topY+ob.gap/2,r:9.9*scaleF,
+  coins.push({x:ob.x+ob.w/2,y:ob.topY+ob.gap/2,r:10.4*scaleF,
     collected:false,pulse:Math.random()*Math.PI*2,parentOb:ob,spawnTopY:ob.topY});
 }
 function drawCoins(spd,dt){
@@ -407,9 +407,9 @@ function spawnCoinRain(ob){
   var cx=ob.x+ob.w/2;
   var midY=ob.topY+ob.gap/2;
   var spread=ob.gap*.2;
-  coins.push({x:cx-spread,y:midY-spread,r:9.9*scaleF,collected:false,pulse:0,parentOb:ob,spawnTopY:ob.topY});
-  coins.push({x:cx,y:midY,r:9.9*scaleF,collected:false,pulse:1,parentOb:ob,spawnTopY:ob.topY});
-  coins.push({x:cx+spread,y:midY+spread,r:9.9*scaleF,collected:false,pulse:2,parentOb:ob,spawnTopY:ob.topY});
+  coins.push({x:cx-spread,y:midY-spread,r:10.4*scaleF,collected:false,pulse:0,parentOb:ob,spawnTopY:ob.topY});
+  coins.push({x:cx,y:midY,r:10.4*scaleF,collected:false,pulse:1,parentOb:ob,spawnTopY:ob.topY});
+  coins.push({x:cx+spread,y:midY+spread,r:10.4*scaleF,collected:false,pulse:2,parentOb:ob,spawnTopY:ob.topY});
 }
 function spawnPowerUp(ob,type){
   var r=11*scaleF;
@@ -577,7 +577,7 @@ function gameLoop(ts){
         ob.topY=Math.max(ob.minY,Math.min(ob.maxY,ob.topY));
       }
       // Spawn coin — use obstacleScore+1 (next score) to be accurate
-      if(!ob.coinSpawned&&ob.x<W*.5){
+      if(!ob.coinSpawned&&ob.x<W*.75){
         ob.coinSpawned=true;
         var coinProb=(obstacleScore+1)<30?.25:Math.min(.45,.25+((obstacleScore+1)-30)*.003333);
         if(Math.random()<coinProb){
