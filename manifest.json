@@ -1,0 +1,24 @@
+{
+  "name": "O Meu Amor Amanda",
+  "short_name": "Amanda 💕",
+  "description": "Um jogo de amor para a Amanda",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#1a0010",
+  "theme_color": "#ff2d78",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

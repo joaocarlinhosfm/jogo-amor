@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>O Meu Amor — Amanda</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Amanda 💕">
+  <meta name="theme-color" content="#ff2d78">
+  <link rel="apple-touch-icon" href="logo.svg">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+<div id="rotateMsg">
+  <div class="rot-icon">📱</div>
+  <p>Roda o telemóvel 💕</p>
+</div>
+<div class="heart-bg" id="heartBg"></div>
+<div class="screen" id="landing">
+  <div class="hero-badge">💕 para sempre juntos</div>
+  <div class="amanda-orbit-wrap">
+    <div class="orbit-ring"></div>
+    <div class="orbit-ring-2"></div>
+    <img class="amanda-hero" id="amandaHeroImg" src="amanda.jpg" alt="Amanda">
+  </div>
+  <h1 class="hero-title">O Meu Amor</h1>
+  <h2 class="hero-name">Amanda</h2>
+  <div class="hero-divider"><span></span><i></i><span></span></div>
+  <button class="cta-btn" id="startBtn">💖 COMEÇAR AVENTURA</button>
+  <button class="btn-secondary" id="rankLandBtn">🏆 Ranking</button>
+  <button class="btn-secondary" id="profileLandBtn">👤 Perfil</button>
+  <p class="hint">toque para voar pelo universo</p>
+</div>
+
+<!-- Auth Screen -->
+<div class="screen hidden" id="namePrompt">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Entrar</button>
+      <button class="auth-tab" id="tabRegister">Criar Conta</button>
+    </div>
+    <div class="auth-photo-wrap" id="authPhotoWrap" style="display:none">
+      <div class="auth-photo-circle" id="authPhotoCircle">
+        <span id="authPhotoIcon" style="font-size:22px">&#128247;</span>
+        <img id="authPhotoPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0" />
+      </div>
+      <p class="auth-photo-hint">toca para adicionar foto</p>
+      <input type="file" id="authPhotoFile" accept="image/*" style="display:none" />
+    </div>
+    <input class="name-input" id="nameInput" type="text" maxlength="16" placeholder="O teu nome..." autocomplete="off" />
+    <div class="pin-row">
+      <input class="pin-input" id="pin1" type="tel" maxlength="1" placeholder="·" />
+      <input class="pin-input" id="pin2" type="tel" maxlength="1" placeholder="·" />
+      <input class="pin-input" id="pin3" type="tel" maxlength="1" placeholder="·" />
+      <input class="pin-input" id="pin4" type="tel" maxlength="1" placeholder="·" />
+    </div>
+    <p class="auth-error" id="authError"></p>
+    <button class="cta-btn" id="nameSaveBtn" style="width:100%;margin-top:.4rem">Entrar &#128150;</button>
+  </div>
+</div>
+
+
+<!-- Ranking -->
+<div class="screen hidden" id="ranking">
+  <div class="rank-title">🏆 Ranking</div>
+  <p class="rank-sub">Top 10 — Melhores Scores</p>
+  <div class="rank-list" id="rankList"><div class="rank-loading">A carregar... 💕</div></div>
+  <button class="btn-secondary" id="rankBackBtn" onclick="_rankBack&&_rankBack();document.getElementById('ranking').classList.add('hidden');event.stopPropagation()">← Voltar</button>
+</div>
+
+
+<!-- Profile Screen -->
+<div class="screen hidden" id="profile">
+  <div class="profile-header">
+    <img class="profile-avatar" src="amanda.jpg" id="profileAvatar" alt="">
+    <div>
+      <p class="profile-badge-label">Jogador</p>
+      <h2 class="profile-name" id="profileName">—</h2>
+    </div>
+  </div>
+  <div class="profile-grid">
+    <div class="profile-stat">
+      <span class="ps-val" id="psBest">0</span>
+      <span class="ps-label">Recorde</span>
+    </div>
+    <div class="profile-stat">
+      <span class="ps-val" id="psGames">0</span>
+      <span class="ps-label">Partidas</span>
+    </div>
+    <div class="profile-stat">
+      <span class="ps-val" id="psCoins">0</span>
+      <span class="ps-label">Moedas</span>
+    </div>
+    <div class="profile-stat">
+      <span class="ps-val" id="psObs">0</span>
+      <span class="ps-label">Obstáculos</span>
+    </div>
+    <div class="profile-stat profile-stat--wide">
+      <span class="ps-val ps-combo" id="psCombo">0</span>
+      <span class="ps-label">Melhor Combo</span>
+    </div>
+  </div>
+  <div class="profile-combo-tip">
+    <span>💡</span>
+    <p>Passa 5 consecutivos (obstáculos + moedas) para activar x2. Aos 10 consecutivos activas x3!</p>
+  </div>
+  <button class="btn-secondary" id="profileBackBtn">← Voltar</button>
+</div>
+
+<div id="game-wrap"><canvas id="gameCanvas"></canvas></div>
+<div id="comboBar"><div class="combo-pill"><span class="combo-x" id="comboX">x2</span><span class="combo-label">Combo</span></div></div>
+<div id="hud">
+  <div class="hud-score" id="scoreDisplay">0</div>
+  <div class="hud-best">RECORDE<span id="bestDisplay">0</span></div>
+</div>
+<div class="screen hidden" id="gameover">
+  <div class="go-title">&#128148; Ops...</div>
+  <p class="go-sub">tenta outra vez, amor</p>
+  <div class="score-card">
+    <div class="score-label">Coracoes</div>
+    <div class="score-val" id="goScore">0</div>
+    <div id="newRecordBadge" style="display:none;margin-bottom:.7rem;">
+        <span style="font-family:'Pacifico',cursive;font-size:1rem;color:#ffd60a;text-shadow:0 0 12px rgba(255,214,10,.7);">🏆 Novo Recorde!</span>
+      </div>
+      <div class="score-best-row">
+        <div class="score-best-item"><div class="score-label">Recorde</div><div class="sval" id="goBest">0</div></div>
+        <div class="score-best-item"><div class="score-label">Obstáculos</div><div class="sval" id="goAst">0</div></div>
+        <div class="score-best-item"><div class="score-label">Moedas</div><div class="sval" id="goCoins">0</div></div>
+      </div>
+  </div>
+  <div class="btn-row">
+    <button class="cta-btn" id="restartBtn" onclick="startGame();event.stopPropagation()">&#128149; OUTRA VEZ</button>
+    <button class="btn-secondary" id="menuBtn" onclick="showMenu();event.stopPropagation()">MENU</button>
+    <button class="btn-secondary" id="rankGoBtn" onclick="showRanking(function(){document.getElementById('gameover').classList.remove('hidden')});event.stopPropagation()">🏆 Ranking</button>
+  </div>
+</div>
+<div id="top3Overlay">
+  <div class="top3-trophy">🏆</div>
+  <div class="top3-title" id="top3Title">Parabéns!<br>Estás no Top 3! 🎉</div>
+  <p class="top3-score-line">A tua pontuação: <span id="top3ScoreVal" style="color:#ffd60a;font-family:'Pacifico',cursive;">0</span></p>
+  <div class="rank-list top3-rank-list" id="top3List"><div class="rank-loading">A carregar... 💕</div></div>
+  <div class="top3-btn-row">
+    <button class="cta-btn" id="top3PlayBtn" onclick="document.getElementById('top3Overlay').classList.remove('show');startGame();event.stopPropagation()">💗 Jogar de Novo</button>
+    <button class="btn-secondary" id="top3MenuBtn" onclick="document.getElementById('top3Overlay').classList.remove('show');showMenu();event.stopPropagation()">Menu</button>
+  </div>
+</div></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="game.js"></script>
+  <script src="firebase.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4a0030"/>
+      <stop offset="100%" stop-color="#1a0010"/>
+    </radialGradient>
+    <radialGradient id="heartG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#ff8cb0"/>
+      <stop offset="100%" stop-color="#cc0050"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff2d78" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#ff2d78" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+  <!-- Glow -->
+  <circle cx="256" cy="256" r="200" fill="url(#glow)"/>
+  <!-- Stars -->
+  <circle cx="80" cy="90" r="3" fill="white" opacity="0.7"/>
+  <circle cx="150" cy="60" r="2" fill="white" opacity="0.5"/>
+  <circle cx="420" cy="80" r="3" fill="white" opacity="0.8"/>
+  <circle cx="440" cy="150" r="2" fill="white" opacity="0.5"/>
+  <circle cx="60" cy="380" r="2.5" fill="white" opacity="0.6"/>
+  <circle cx="460" cy="400" r="2" fill="white" opacity="0.7"/>
+  <circle cx="380" cy="440" r="3" fill="white" opacity="0.5"/>
+  <circle cx="100" cy="440" r="2" fill="white" opacity="0.6"/>
+  <circle cx="200" cy="80" r="1.5" fill="white" opacity="0.9"/>
+  <circle cx="340" cy="70" r="2" fill="white" opacity="0.7"/>
+  <!-- Heart shape -->
+  <path d="M256 370 C180 310, 100 260, 100 185 C100 130, 145 95, 190 95 C215 95, 238 108, 256 128 C274 108, 297 95, 322 95 C367 95, 412 130, 412 185 C412 260, 332 310, 256 370Z" fill="url(#heartG)"/>
+  <!-- Heart shine -->
+  <ellipse cx="195" cy="155" rx="28" ry="18" fill="white" opacity="0.22" transform="rotate(-35,195,155)"/>
+  <!-- Face circle inside heart -->
+  <circle cx="256" cy="230" r="72" fill="#1a0010" opacity="0.35"/>
+  <!-- Amanda initial A -->
+  <text x="256" y="258" text-anchor="middle" dominant-baseline="middle" font-family="Georgia,serif" font-size="88" font-weight="bold" fill="white" opacity="0.92">A</text>
+  <!-- Small hearts orbiting -->
+  <text x="138" y="210" font-size="22" opacity="0.8">💕</text>
+  <text x="345" y="195" font-size="18" opacity="0.7">✨</text>
+  <text x="155" y="320" font-size="16" opacity="0.6">🌸</text>
+</svg>
