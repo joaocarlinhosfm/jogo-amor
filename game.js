@@ -1,5 +1,5 @@
 // ── Ship photos (random per game) ────────────────────────────
-var SHIP_PHOTOS=["amanda.jpg","photo2.jpg","photo3.jpg"];
+var SHIP_PHOTOS=["amanda.jpg","photo3.jpg","photo4.jpg","photo5.jpg"];
 var amandaImg=new Image();
 var _currentPhoto="amanda.jpg";
 function pickRandomPhoto(){
