@@ -209,11 +209,11 @@ var ship,obstacles=[],coins=[],particles=[];
 var obstTimer=0,obstInterval,gravity,flapPower;
 var gameReady=false,tilt=0,lastTime=0;
 var lastMsgScore=0;
-var combo=0,comboTimer=0,COMBO_TIMEOUT=90;
+var combo=0,comboTimer=0,COMBO_TIMEOUT=390;
 var comboPopup={val:0,pts:1,alpha:0,y:0,active:false};
 // ── Power-up state ────────────────────────────────────────────
-var shieldActive=false,shieldTimer=0,SHIELD_DURATION=120; // frames
-var magnetActive=false,magnetTimer=0,MAGNET_DURATION=150;
+var shieldActive=false,shieldTimer=0,SHIELD_DURATION=420; // frames
+var magnetActive=false,magnetTimer=0,MAGNET_DURATION=450;
 var announce100={alpha:0,active:false};
 var powerUps=[]; // {x,y,type,r,pulse}
 
@@ -255,6 +255,94 @@ function sndHit(){
     var src=ac.createBufferSource(),g=ac.createGain();
     src.buffer=noiseBuffer;src.connect(g);g.connect(ac.destination);g.gain.value=.6;src.start();
   }catch(e){}
+}
+
+
+// ── Themes ────────────────────────────────────────────────────
+var THEMES={
+  hearts:{
+    name:"hearts",
+    pipe:["#3d0020","#600030","#2a0018"],
+    pipeStroke:"rgba(255,80,140,.6)",
+    bgColors:["rgba(80,5,40,.22)","rgba(40,0,80,.18)","rgba(255,45,120,.1)"],
+    starColor:"255,200,220",
+    trail:["#ff2d78","#ff6fa0","#ffb3cc","#ff2d78","#ff8cb0"],
+    emojis:["💕","💗","💖","💓","🌸","✨","💝"],
+    floatEmojis:["💕","💗","💖","💓","🌸","✨","💝"]
+  },
+  galaxy:{
+    name:"galaxy",
+    pipe:["#0a0030","#1a0860","#050018"],
+    pipeStroke:"rgba(120,80,255,.7)",
+    bgColors:["rgba(20,5,80,.25)","rgba(60,0,120,.2)","rgba(0,200,255,.08)"],
+    starColor:"180,160,255",
+    trail:["#a78bfa","#7c3aed","#c4b5fd","#818cf8","#e0e7ff"],
+    emojis:["🐱","😺","🐾","🌙","⭐","🌟","🐈"],
+    floatEmojis:["🐱","😺","🐾","🌙","⭐","🌟","🐈"]
+  },
+  fire:{
+    name:"fire",
+    pipe:["#3d0800","#701500","#200500"],
+    pipeStroke:"rgba(255,120,0,.7)",
+    bgColors:["rgba(180,40,0,.2)","rgba(100,20,0,.18)","rgba(255,100,0,.1)"],
+    starColor:"255,200,100",
+    trail:["#ff4500","#ff6600","#ff8c00","#ffa500","#ffcc00"],
+    emojis:["🎂","🧁","🍰","🎉","🎈","🥳","🍭"],
+    floatEmojis:["🎂","🧁","🍰","🎉","🎈","🥳","🍭"]
+  },
+  gold:{
+    name:"gold",
+    pipe:["#1a1000","#3d2800","#0d0800"],
+    pipeStroke:"rgba(255,214,10,.8)",
+    bgColors:["rgba(120,80,0,.22)","rgba(80,40,0,.18)","rgba(255,214,10,.08)"],
+    starColor:"255,230,100",
+    trail:["#ffd60a","#ffb300","#ffe066","#ffc300","#fff3b0"],
+    emojis:["🍬","🍭","🍫","🍩","🍪","🧸","🌈"],
+    floatEmojis:["🍬","🍭","🍫","🍩","🍪","🧸","🌈"]
+  }
+};
+var _currentTheme=THEMES.hearts;
+var _lastThemeName="";
+var _bgFloaters=[]; // DOM spans for background emojis
+
+function getTheme(){
+  // Use total score for theme switching
+  if(score>=120)return THEMES.gold;
+  if(score>=80)return THEMES.fire;
+  if(score>=40)return THEMES.galaxy;
+  return THEMES.hearts;
+}
+
+function applyTheme(theme){
+  if(theme.name===_lastThemeName)return; // no change
+  console.log("Theme switch:", _lastThemeName,"->",theme.name,"obstacleScore:",obstacleScore);
+  _lastThemeName=theme.name;
+  _currentTheme=theme;
+  pipeCache={}; // force redraw with new colors
+  updateBgFloaters(theme);
+  // Re-apply layer colors (initStars may have reset them)
+  if(layers&&layers.length){
+    layers[0].color=theme.starColor.replace("255","180");
+    layers[1].color=theme.starColor.replace("255","200");
+    layers[2].color=theme.starColor;
+  }
+}
+
+function updateBgFloaters(theme){
+  var bg=document.getElementById("heartBg");
+  if(!bg)return;
+  bg.innerHTML="";
+  _bgFloaters=[];
+  for(var i=0;i<20;i++){
+    var s=document.createElement("span");
+    s.textContent=theme.floatEmojis[i%theme.floatEmojis.length];
+    s.style.left=(Math.random()*96)+"%";
+    s.style.fontSize=(.7+Math.random()*1.1)+"rem";
+    var dur=8+Math.random()*12,del=Math.random()*12;
+    s.style.animation="riseHeart "+dur+"s "+del+"s linear infinite";
+    bg.appendChild(s);
+    _bgFloaters.push(s);
+  }
 }
 
 // ── Surprise messages ─────────────────────────────────────────
@@ -332,6 +420,7 @@ function initGame(){
   obstTimer=-obstInterval; // grace period
   score=0;obstacleScore=0;coinScore=0;
   combo=0;comboTimer=0;comboPopup.active=false;
+  _lastThemeName="";pipeCache={};applyTheme(THEMES.hearts);
   shieldActive=false;shieldTimer=0;magnetActive=false;magnetTimer=0;
   announce100.active=false;announce100.alpha=0;powerUps=[];_lastMilestone=0;
   msgPopup.active=false;
@@ -357,12 +446,13 @@ function drawAmanda(x,y,w,h,tl,dead){
 // ── Pipe cache ────────────────────────────────────────────────
 var pipeCache={};
 function getPipe(w,h,top,skipCache){
-  var key=(top?"t":"b")+Math.round(w)+","+Math.round(h);
+  var key=(top?"t":"b")+Math.round(w)+","+Math.round(h)+_currentTheme.name;
   if(!skipCache&&pipeCache[key])return pipeCache[key];
   var oc=document.createElement("canvas");oc.width=Math.ceil(w);oc.height=Math.ceil(h)+20;
   var c=oc.getContext("2d");
+  var th=skipCache?_currentTheme:_currentTheme; // use current theme
   var g=c.createLinearGradient(0,0,w,0);
-  g.addColorStop(0,"#3d0020");g.addColorStop(.5,"#600030");g.addColorStop(1,"#2a0018");
+  g.addColorStop(0,th.pipe[0]);g.addColorStop(.5,th.pipe[1]);g.addColorStop(1,th.pipe[2]);
   c.fillStyle=g;c.beginPath();
   var bumps=5;
   if(top){
@@ -374,7 +464,7 @@ function getPipe(w,h,top,skipCache){
     for(var i=0;i<=bumps;i++){var px=(i/bumps)*w,jag=(i%2?1:-1)*(5+Math.sin(i*2)*8);c.lineTo(px,jag);}
     c.lineTo(w,h);c.lineTo(0,h);c.closePath();
   }
-  c.fill();c.strokeStyle="rgba(255,80,140,.6)";c.lineWidth=2;c.stroke();
+  c.fill();c.strokeStyle=_currentTheme.pipeStroke;c.lineWidth=2;c.stroke();
   c.globalAlpha=.22;c.fillStyle="#ff6fa0";
   for(var i=0;i<Math.floor(h/50);i++){
     var cy=top?h*.3+i*45:h*.2+i*45;
@@ -464,14 +554,14 @@ function spawnTrail(x,y){
   var spd=(1.2+Math.random()*1.8)*scaleF;
   var spread=(Math.random()-.5)*0.6;
   particles.push({x:x,y:y,vx:-spd,vy:spread*spd,life:1,
-    size:(5+Math.random()*5)*scaleF,color:heartColors[Math.floor(Math.random()*heartColors.length)]});
+    size:(5+Math.random()*5)*scaleF,color:_currentTheme.trail[Math.floor(Math.random()*_currentTheme.trail.length)]});
 }
 function spawnH(x,y,n){
   if(particles.length>MAX_PARTICLES)particles.splice(0,particles.length-MAX_PARTICLES);
   for(var i=0;i<n;i++){
     var a=(Math.PI*2/n)*i+Math.random()*.6,spd=(1.5+Math.random()*3)*scaleF;
     particles.push({x:x,y:y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-scaleF,
-      life:1,size:(8+Math.random()*8)*scaleF,color:heartColors[Math.floor(Math.random()*heartColors.length)]});
+      life:1,size:(8+Math.random()*8)*scaleF,color:_currentTheme.trail[Math.floor(Math.random()*_currentTheme.trail.length)]});
   }
 }
 function drawPart(){
@@ -618,6 +708,15 @@ function drawMagnetAura(){
 }
 
 // ── 100 pts announcement ──────────────────────────────────────
+function drawThemeDebug(){
+  if(!gameState||gameState!=="playing")return;
+  ctx.save();
+  ctx.font="bold 14px sans-serif";
+  ctx.fillStyle="rgba(255,255,0,.8)";
+  ctx.textAlign="left";
+  ctx.fillText("Theme:"+_currentTheme.name+" s:"+score,10,H-10);
+  ctx.restore();
+}
 function drawAnnounce100(){
   if(!announce100.active)return;
   announce100.alpha-=.008;
@@ -651,6 +750,16 @@ function gameLoop(ts){
   if(!loopActive)return;
   raf=requestAnimationFrame(gameLoop);
   ctx.clearRect(0,0,W,H);
+  // Themed background gradient
+  if(gameState==="playing"||gameState==="dead"){
+    var th=_currentTheme;
+    var bg1=ctx.createRadialGradient(W*.2,H*.3,0,W*.2,H*.3,W*.9);
+    bg1.addColorStop(0,th.bgColors[0]);bg1.addColorStop(1,"transparent");
+    ctx.fillStyle=bg1;ctx.fillRect(0,0,W,H);
+    var bg2=ctx.createRadialGradient(W*.8,H*.7,0,W*.8,H*.7,W*.7);
+    bg2.addColorStop(0,th.bgColors[1]);bg2.addColorStop(1,"transparent");
+    ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
+  }
   drawStars(gameReady);
 
   if(gameState==="playing"){
@@ -663,6 +772,8 @@ function gameLoop(ts){
     if(!lastTime)lastTime=ts;
     var dt=Math.min((ts-lastTime)/16.67,1.0);lastTime=ts;
 
+    // Theme update
+    applyTheme(getTheme());
     // Combo decay
     if(combo>0){comboTimer-=dt*1.5;if(comboTimer<=0){combo=0;comboTimer=0;}}
     // Shield timer
@@ -790,6 +901,7 @@ function gameLoop(ts){
     if(magnetActive){drawMagnetAura();}
     drawComboPopup();
     drawMsg();
+    drawThemeDebug();
 
   }else if(gameState==="dead"){
     for(var i=0;i<obstacles.length;i++)drawObs(obstacles[i]);
