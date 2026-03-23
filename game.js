@@ -375,9 +375,9 @@ function gameLoop(ts){
     if(obstTimer>=obstInterval){
       obstTimer=0;
       var gRamp=Math.max(0,score-40);
-      var gap=Math.max(H*.26,H*(.32+Math.random()*.1)-gRamp*H*.002);
+      var gap=Math.max(H*.22,H*(.30+Math.random()*.1)-gRamp*H*.0007);
       var topY=H*.1+Math.random()*(H-gap-H*.2);
-      var movProb=score>=40?Math.min(.55,.35+(score-40)*.001667):0;
+      var movProb=score>=40?Math.min(.60,.40+(score-40)*.001667):0;
       var moving=Math.random()<movProb;
       obstacles.push({x:W+10,w:65*scaleF,topY:topY,gap:gap,scored:false,coinSpawned:false,
         moving:moving,vy:moving?((.4+Math.random()*.5)*scaleF*(Math.random()<.5?1:-1)):0,
@@ -385,7 +385,7 @@ function gameLoop(ts){
     }
 
     var ramp=Math.max(0,score-40);
-    var spd=(2.449+ramp*.025)*scaleF;
+    var spd=(2.449+ramp*.015)*scaleF;
 
     for(var i=obstacles.length-1;i>=0;i--){
       var ob=obstacles[i];ob.x-=spd*dt;
