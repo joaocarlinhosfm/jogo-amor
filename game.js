@@ -8,6 +8,134 @@ var totalCoinsEver=parseInt(localStorage.getItem("amandaTotalCoins")||"0");
 var totalObstaclesEver=parseInt(localStorage.getItem("amandaTotalObs")||"0");
 var bestCombo=parseInt(localStorage.getItem("amandaBestCombo")||"0");
 
+// ── Procedural Music Engine ───────────────────────────────────
+var musicPlaying=false,musicScheduler=null;
+var musicStep=0,musicTempo=140,musicGain=null,musicMaster=null;
+
+// Pentatonic scale in A minor for romantic/emotional feel
+var SCALE=[220,246.94,261.63,293.66,329.63,369.99,392,440,493.88,523.25];
+// Bass root notes
+var BASS=[55,55,65.41,55];
+// Melody pattern (index into SCALE, -1=rest)
+var MELODY=[0,2,4,6,4,2,0,-1, 3,5,7,5,3,1,-1,-1,
+            2,4,6,8,6,4,2,-1, 0,3,5,7,5,3,0,-1];
+var BEAT=[1,0,0,0,1,0,1,0, 1,0,0,0,1,0,1,0]; // kick pattern
+
+function getMusicTempo(){
+  if(!musicPlaying)return 140;
+  if(score>=100)return Math.min(200,140+(score-100)*.6);
+  return 140;
+}
+
+function musicNote(freq,start,dur,vol,type,dest){
+  try{
+    var ac=getAC();
+    var o=ac.createOscillator(),g=ac.createGain();
+    o.connect(g);g.connect(dest||musicMaster);
+    o.type=type||"sine";
+    o.frequency.setValueAtTime(freq,start);
+    g.gain.setValueAtTime(0,start);
+    g.gain.linearRampToValueAtTime(vol,start+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,start+dur);
+    o.start(start);o.stop(start+dur+0.05);
+  }catch(e){}
+}
+
+function scheduleMusic(){
+  if(!musicPlaying)return;
+  try{
+    var ac=getAC();
+    var now=ac.currentTime;
+    var tempo=getMusicTempo();
+    var step=60/tempo/4; // 16th note duration
+
+    // Schedule 2 bars ahead (32 steps)
+    var steps=32;
+    for(var i=0;i<steps;i++){
+      var t=now+(i*step);
+      var si=(musicStep+i)%MELODY.length;
+      var bi=si%BEAT.length;
+
+      // Kick drum (filtered noise burst)
+      if(BEAT[bi]&&si%2===0){
+        try{
+          var buf=ac.createBuffer(1,Math.floor(ac.sampleRate*0.08),ac.sampleRate);
+          var d=buf.getChannelData(0);
+          for(var j=0;j<d.length;j++)d[j]=(Math.random()*2-1)*Math.pow(1-j/d.length,3);
+          var src=ac.createBufferSource(),kg=ac.createGain(),kf=ac.createBiquadFilter();
+          src.buffer=buf;kf.type="lowpass";kf.frequency.value=180;
+          src.connect(kf);kf.connect(kg);kg.connect(musicMaster);
+          kg.gain.setValueAtTime(.25,t);kg.gain.exponentialRampToValueAtTime(.001,t+.08);
+          src.start(t);
+        }catch(e){}
+      }
+
+      // Hi-hat (every 8th note)
+      if(si%2===0){
+        try{
+          var hbuf=ac.createBuffer(1,Math.floor(ac.sampleRate*0.04),ac.sampleRate);
+          var hd=hbuf.getChannelData(0);
+          for(var j=0;j<hd.length;j++)hd[j]=(Math.random()*2-1)*Math.pow(1-j/hd.length,4);
+          var hs=ac.createBufferSource(),hg=ac.createGain(),hf=ac.createBiquadFilter();
+          hs.buffer=hbuf;hf.type="highpass";hf.frequency.value=8000;
+          hs.connect(hf);hf.connect(hg);hg.connect(musicMaster);
+          hg.gain.setValueAtTime(.06,t);hg.gain.exponentialRampToValueAtTime(.001,t+.04);
+          hs.start(t);
+        }catch(e){}
+      }
+
+      // Bass (every bar)
+      if(si%16===0){
+        var bassFreq=BASS[Math.floor(si/16)%BASS.length];
+        musicNote(bassFreq,t,step*6,.12,"sawtooth",musicMaster);
+        musicNote(bassFreq*2,t,step*6,.06,"sawtooth",musicMaster);
+      }
+
+      // Melody
+      if(MELODY[si]>=0){
+        var mFreq=SCALE[MELODY[si]];
+        var mVol=si%8===0?.09:.06;
+        var mDur=si%4===0?step*3:step*1.5;
+        musicNote(mFreq,t,mDur,mVol,"triangle",musicMaster);
+        // harmony a 5th above on strong beats
+        if(si%8===0&&MELODY[si]+4<SCALE.length){
+          musicNote(SCALE[MELODY[si]+4]*0.5,t,mDur*.8,mVol*.4,"sine",musicMaster);
+        }
+      }
+    }
+
+    musicStep=(musicStep+steps)%MELODY.length;
+    // Reschedule
+    musicScheduler=setTimeout(scheduleMusic, steps*step*1000*0.7);
+  }catch(e){}
+}
+
+function startMusic(){
+  if(musicPlaying)return;
+  try{
+    var ac=getAC();
+    musicMaster=ac.createGain();
+    musicMaster.gain.value=0.55;
+    musicMaster.connect(ac.destination);
+    musicPlaying=true;musicStep=0;
+    scheduleMusic();
+  }catch(e){}
+}
+
+function stopMusic(){
+  musicPlaying=false;
+  if(musicScheduler){clearTimeout(musicScheduler);musicScheduler=null;}
+  if(musicMaster){
+    try{musicMaster.gain.setTargetAtTime(0,getAC().currentTime,0.3);}catch(e){}
+    setTimeout(function(){try{musicMaster.disconnect();}catch(e){}musicMaster=null;},500);
+  }
+}
+
+function setMusicVolume(v){
+  if(musicMaster)try{musicMaster.gain.setTargetAtTime(v,getAC().currentTime,.1);}catch(e){}
+}
+
+
 // ── Parallax stars (single implementation) ───────────────────
 var sfCanvas=document.getElementById("starfield"),sfCtx=sfCanvas.getContext("2d");
 var layers=[];
@@ -632,7 +760,7 @@ function gameLoop(ts){
     }
     if(hit){
       loopActive=false;
-      sndHit();spawnH(ship.x+ship.w/2,ship.y+ship.h/2,14);
+      sndHit();stopMusic();spawnH(ship.x+ship.w/2,ship.y+ship.h/2,14);
       combo=0;comboTimer=0; // reset combo on death
       var gw=document.getElementById("game-wrap");
       gw.classList.add("shake");
@@ -672,6 +800,7 @@ function stopLoop(){loopActive=false;if(raf)cancelAnimationFrame(raf);raf=null;}
 function showMenu(){
   stopLoop();
   if(ctx)ctx.clearRect(0,0,W,H);
+  stopMusic();
   var cb=document.getElementById("comboBar");if(cb)cb.classList.remove("active");
   var sb=document.getElementById("shieldBadge");if(sb)sb.classList.remove("active");
   var mb=document.getElementById("magnetBadge");if(mb)mb.classList.remove("active");
@@ -722,7 +851,7 @@ function flap(){
   var now=performance.now();
   if(now-_lastFlap<50)return;
   _lastFlap=now;
-  if(!gameReady){gameReady=true;lastTime=0;}
+  if(!gameReady){gameReady=true;lastTime=0;startMusic();}
   ship.vy=ship.vy*.15+flapPower*.85;
   sndFlap();spawnH(ship.x+ship.w*.05,ship.y+ship.h*.6,5);
 }
@@ -739,6 +868,15 @@ window.addEventListener("load",function(){
   reg("restartBtn", function(){startGame();});
   reg("menuBtn",    function(){showMenu();});
   reg("rankLandBtn",function(){if(typeof showRanking==="function")showRanking(showMenu);});
+  // Mute toggle
+  var muted=false;
+  var muteBtn=document.getElementById("muteBtn");
+  if(muteBtn)muteBtn.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    muted=!muted;
+    setMusicVolume(muted?0:.55);
+    muteBtn.textContent=muted?"🔇":"🔊";
+  });
 });
 
 amandaImg.onload=function(){buildAmandaCache(Math.round(45*H/700)||45);};
