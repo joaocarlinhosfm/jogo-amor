@@ -406,6 +406,13 @@ window.addEventListener("load",function(){
   var pl=document.getElementById("profileLandBtn");
   if(pl)pl.addEventListener("pointerdown",function(){showProfile(showMenu);});
 
+  // Tutorial OK
+  var tok=document.getElementById("tutOkBtn");
+  if(tok)tok.addEventListener("pointerdown",function(){
+    localStorage.setItem("amandaTutorialSeen","1");
+    document.getElementById("tutorial").classList.add("hidden");
+  });
+
   // Try auto-login from localStorage
   var savedKey=localStorage.getItem("amandaPlayerKey");
   if(savedKey){
@@ -417,3 +424,9 @@ window.addEventListener("load",function(){
     }).catch(function(){});
   }
 });
+
+// ── Tutorial ──────────────────────────────────────────────────
+function showTutorial(){
+  hideAllScreens();
+  document.getElementById("tutorial").classList.remove("hidden");
+}

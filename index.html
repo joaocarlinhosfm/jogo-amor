@@ -115,6 +115,7 @@
 </div>
 
 <div id="game-wrap"><canvas id="gameCanvas"></canvas></div>
+<div id="powerHud"><div class="pow-badge" id="shieldBadge"><span>🛡️</span><span class="pow-name">Escudo</span></div><div class="pow-badge" id="magnetBadge"><span>🧲</span><span class="pow-name">Íman</span></div></div>
 <div id="comboBar"><div class="combo-pill"><span class="combo-x" id="comboX">x2</span><span class="combo-label">Combo</span></div></div>
 <div id="hud">
   <div class="hud-score" id="scoreDisplay">0</div>
@@ -155,5 +156,38 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="game.js"></script>
   <script src="firebase.js"></script>
+
+<!-- Tutorial overlay -->
+<div class="screen hidden" id="tutorial">
+  <div class="tutorial-card">
+    <div class="tutorial-title">Novidades após 100 pontos! 🎉</div>
+    <div class="tutorial-items">
+      <div class="tutorial-item">
+        <div class="tut-icon tut-shield">🛡️</div>
+        <div class="tut-text">
+          <strong>Escudo</strong>
+          <span>Absorve uma colisão. Dura 2 segundos.</span>
+        </div>
+      </div>
+      <div class="tutorial-item">
+        <div class="tut-icon tut-magnet">🧲</div>
+        <div class="tut-text">
+          <strong>Íman</strong>
+          <span>Atrai todas as moedas. Dura 2.5 segundos.</span>
+        </div>
+      </div>
+      <div class="tutorial-item">
+        <div class="tut-icon tut-rain">🪙🪙🪙</div>
+        <div class="tut-text">
+          <strong>Chuva de moedas</strong>
+          <span>3 moedas de uma vez em padrão especial.</span>
+        </div>
+      </div>
+    </div>
+    <p class="tut-hint">Os power-ups aparecem aleatoriamente nos obstáculos</p>
+    <button class="cta-btn" id="tutOkBtn" style="margin-top:.5rem">Vamos lá! 💕</button>
+  </div>
+</div>
+
 </body>
 </html>

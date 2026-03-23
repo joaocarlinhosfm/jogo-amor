@@ -74,6 +74,11 @@ var gameReady=false,tilt=0,lastTime=0;
 var lastMsgScore=0;
 var combo=0,comboTimer=0,COMBO_TIMEOUT=90;
 var comboPopup={val:0,pts:1,alpha:0,y:0,active:false};
+// ── Power-up state ────────────────────────────────────────────
+var shieldActive=false,shieldTimer=0,SHIELD_DURATION=120; // frames
+var magnetActive=false,magnetTimer=0,MAGNET_DURATION=150;
+var announce100={alpha:0,active:false};
+var powerUps=[]; // {x,y,type,r,pulse}
 
 // ── Web Audio ─────────────────────────────────────────────────
 var AC=null,noiseBuffer=null;
@@ -189,6 +194,8 @@ function initGame(){
   obstTimer=-obstInterval; // grace period
   score=0;obstacleScore=0;coinScore=0;
   combo=0;comboTimer=0;comboPopup.active=false;
+  shieldActive=false;shieldTimer=0;magnetActive=false;magnetTimer=0;
+  announce100.active=false;announce100.alpha=0;powerUps=[];
   msgPopup.active=false;
   gameReady=false;tilt=0;lastTime=0;lastMsgScore=0;
   // Increment totalGames here (correct place — game is starting)
@@ -284,6 +291,12 @@ function drawCoins(spd,dt){
     }
     if(c.x+c.r<0){coins.splice(i,1);continue;}
     if(c.collected)continue;
+    // Magnet pulls coins toward ship
+    if(magnetActive){
+      var mdx=ship.x+ship.w/2-c.x,mdy=ship.y+ship.h/2-c.y;
+      var mdist=Math.sqrt(mdx*mdx+mdy*mdy);
+      if(mdist>1){c.x+=mdx/mdist*4*scaleF;c.y+=mdy/mdist*4*scaleF;}
+    }
     var dx=c.x-(ship.x+ship.w/2),dy=c.y-(ship.y+ship.h/2);
     var colDist=c.r+ship.w*.45;
     if(dx*dx+dy*dy<colDist*colDist){
@@ -333,6 +346,158 @@ function drawPart(){
   }
 }
 
+
+// ── Power-up canvas builders ──────────────────────────────────
+function buildShieldCanvas(r){
+  var size=Math.ceil(r*4);
+  var oc=document.createElement("canvas");oc.width=oc.height=size;
+  var c=oc.getContext("2d"),cx=size/2;
+  // glow
+  c.beginPath();c.arc(cx,cx,r*1.5,0,Math.PI*2);
+  c.fillStyle="rgba(100,180,255,.15)";c.fill();
+  // body
+  var sg=c.createRadialGradient(cx-r*.3,cx-r*.3,0,cx,cx,r);
+  sg.addColorStop(0,"#a8d8ff");sg.addColorStop(.5,"#378ADD");sg.addColorStop(1,"#0c447c");
+  c.beginPath();c.arc(cx,cx,r,0,Math.PI*2);c.fillStyle=sg;c.fill();
+  c.strokeStyle="rgba(150,210,255,.8)";c.lineWidth=1.5;c.stroke();
+  // shield symbol
+  c.strokeStyle="rgba(255,255,255,.9)";c.lineWidth=r*.15;c.lineJoin="round";
+  var s=r*.55;
+  c.beginPath();
+  c.moveTo(cx,cy+s*.8);
+  c.lineTo(cx-s*.75,cy-s*.2);c.lineTo(cx-s*.75,cy-s*.8);
+  c.lineTo(cx+s*.75,cy-s*.8);c.lineTo(cx+s*.75,cy-s*.2);
+  c.lineTo(cx,cy+s*.8);c.stroke();
+  return oc;
+}
+function buildMagnetCanvas(r){
+  var size=Math.ceil(r*4);
+  var oc=document.createElement("canvas");oc.width=oc.height=size;
+  var c=oc.getContext("2d"),cx=size/2;
+  // glow
+  c.beginPath();c.arc(cx,cx,r*1.5,0,Math.PI*2);
+  c.fillStyle="rgba(255,100,180,.15)";c.fill();
+  // body
+  var mg=c.createRadialGradient(cx-r*.3,cx-r*.3,0,cx,cx,r);
+  mg.addColorStop(0,"#ffb3cc");mg.addColorStop(.5,"#ff2d78");mg.addColorStop(1,"#720025");
+  c.beginPath();c.arc(cx,cx,r,0,Math.PI*2);c.fillStyle=mg;c.fill();
+  c.strokeStyle="rgba(255,179,204,.8)";c.lineWidth=1.5;c.stroke();
+  // magnet symbol (U shape)
+  c.strokeStyle="rgba(255,255,255,.9)";c.lineWidth=r*.18;c.lineCap="round";
+  var s=r*.5;
+  c.beginPath();c.moveTo(cx-s*.7,cx-s*.6);
+  c.lineTo(cx-s*.7,cx+s*.3);
+  c.arc(cx,cx+s*.3,s*.7,Math.PI,0);
+  c.lineTo(cx+s*.7,cx-s*.6);c.stroke();
+  // poles
+  c.strokeStyle="rgba(200,255,200,.9)";
+  c.beginPath();c.moveTo(cx-s*.7,cx-s*.6);c.lineTo(cx-s*.7,cx-s*.9);c.stroke();
+  c.strokeStyle="rgba(255,200,200,.9)";
+  c.beginPath();c.moveTo(cx+s*.7,cx-s*.6);c.lineTo(cx+s*.7,cx-s*.9);c.stroke();
+  return oc;
+}
+var _shieldImg=null,_magnetImg=null,_shieldR=0,_magnetR=0;
+var cy=0; // global temp for shield draw
+function getShieldImg(r){if(r!==_shieldR){_shieldR=r;cy=r*2;_shieldImg=buildShieldCanvas(r);}return _shieldImg;}
+function getMagnetImg(r){if(r!==_magnetR){_magnetR=r;_magnetImg=buildMagnetCanvas(r);}return _magnetImg;}
+
+// ── Spawn functions ───────────────────────────────────────────
+function spawnCoinRain(ob){
+  var cx=ob.x+ob.w/2;
+  var midY=ob.topY+ob.gap/2;
+  var spread=ob.gap*.2;
+  coins.push({x:cx-spread,y:midY-spread,r:9.9*scaleF,collected:false,pulse:0,parentOb:ob,spawnTopY:ob.topY});
+  coins.push({x:cx,y:midY,r:9.9*scaleF,collected:false,pulse:1,parentOb:ob,spawnTopY:ob.topY});
+  coins.push({x:cx+spread,y:midY+spread,r:9.9*scaleF,collected:false,pulse:2,parentOb:ob,spawnTopY:ob.topY});
+}
+function spawnPowerUp(ob,type){
+  var r=11*scaleF;
+  powerUps.push({x:ob.x+ob.w/2,y:ob.topY+ob.gap*.35,type:type,r:r,pulse:0,
+    parentOb:ob,spawnTopY:ob.topY});
+}
+
+// ── Draw & collect power-ups ──────────────────────────────────
+function drawPowerUps(spd,dt){
+  for(var i=powerUps.length-1;i>=0;i--){
+    var p=powerUps[i];
+    p.x-=spd*dt;p.pulse+=.08;
+    if(p.parentOb&&p.parentOb.moving){
+      var drift=p.parentOb.topY-p.spawnTopY;
+      p.y+=drift;p.spawnTopY=p.parentOb.topY;
+    }
+    if(p.x+p.r<0){powerUps.splice(i,1);continue;}
+    // collect check
+    var dx=p.x-(ship.x+ship.w/2),dy=p.y-(ship.y+ship.h/2);
+    var colDist=p.r+ship.w*.4;
+    if(dx*dx+dy*dy<colDist*colDist){
+      if(p.type==="shield"){
+        shieldActive=true;shieldTimer=SHIELD_DURATION;
+        spawnH(p.x,p.y,8);playBeep(660,.15,.2,"sine");
+      } else if(p.type==="magnet"){
+        magnetActive=true;magnetTimer=MAGNET_DURATION;
+        spawnH(p.x,p.y,8);playBeep(440,.15,.2,"sine");setTimeout(function(){playBeep(660,.1,.15,"sine");},100);
+      }
+      powerUps.splice(i,1);continue;
+    }
+    // draw
+    var scale=1+Math.sin(p.pulse)*.1;
+    var img=p.type==="shield"?getShieldImg(p.r):getMagnetImg(p.r);
+    var sz=img.width;
+    ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+    ctx.drawImage(img,-sz/2,-sz/2,sz,sz);ctx.restore();
+  }
+}
+
+// ── Shield & Magnet auras ─────────────────────────────────────
+function drawShieldAura(){
+  var r=ship.w*.7;
+  var alpha=.35+.15*Math.sin(Date.now()*.005);
+  ctx.save();
+  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,0,Math.PI*2);
+  ctx.strokeStyle="rgba(100,180,255,"+alpha+")";ctx.lineWidth=3*scaleF;ctx.stroke();
+  ctx.strokeStyle="rgba(150,220,255,"+(alpha*.5)+")";ctx.lineWidth=6*scaleF;ctx.stroke();
+  // timer bar
+  var frac=shieldTimer/SHIELD_DURATION;
+  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,
+    -Math.PI/2,-Math.PI/2+Math.PI*2*frac);
+  ctx.strokeStyle="rgba(100,200,255,.9)";ctx.lineWidth=3*scaleF;ctx.stroke();
+  ctx.restore();
+}
+function drawMagnetAura(){
+  var r=ship.w*1.8;
+  var alpha=.2+.1*Math.sin(Date.now()*.004);
+  ctx.save();
+  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,0,Math.PI*2);
+  ctx.strokeStyle="rgba(255,45,120,"+alpha+")";ctx.lineWidth=2*scaleF;
+  ctx.setLineDash([4*scaleF,4*scaleF]);ctx.stroke();ctx.setLineDash([]);
+  // timer bar
+  var frac=magnetTimer/MAGNET_DURATION;
+  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,ship.w*.7,
+    -Math.PI/2,-Math.PI/2+Math.PI*2*frac);
+  ctx.strokeStyle="rgba(255,45,120,.9)";ctx.lineWidth=3*scaleF;ctx.stroke();
+  ctx.restore();
+}
+
+// ── 100 pts announcement ──────────────────────────────────────
+function drawAnnounce100(){
+  if(!announce100.active)return;
+  announce100.alpha-=.008;
+  if(announce100.alpha<=0){announce100.active=false;return;}
+  var a=announce100.alpha;
+  var scale=1+(1-a)*.5;
+  ctx.save();
+  ctx.globalAlpha=a;ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.translate(W/2,H*.28);ctx.scale(scale,scale);
+  ctx.font="bold "+(28*scaleF)+"px 'Quicksand',sans-serif";
+  ctx.fillStyle="rgba(255,180,0,.4)";ctx.fillText("100 PONTOS! 🎉",2,2);
+  ctx.fillStyle="#ffd60a";ctx.fillText("100 PONTOS! 🎉",0,0);
+  ctx.font="bold "+(13*scaleF)+"px 'Quicksand',sans-serif";
+  ctx.fillStyle="rgba(255,255,255,.8)";ctx.fillText("Atingiste um nível lendário! 💕",0,26*scaleF);
+  ctx.restore();
+  // spawn party particles
+  if(Math.random()<.3)spawnH(Math.random()*W,Math.random()*H*.5,3);
+}
+
 // ── Game Loop ─────────────────────────────────────────────────
 function gameLoop(ts){
   if(!loopActive)return;
@@ -352,6 +517,13 @@ function gameLoop(ts){
 
     // Combo decay
     if(combo>0){comboTimer-=dt*1.5;if(comboTimer<=0){combo=0;comboTimer=0;}}
+    // Shield timer
+    if(shieldActive){shieldTimer-=dt;if(shieldTimer<=0){shieldActive=false;shieldTimer=0;}}
+    // Magnet timer
+    if(magnetActive){magnetTimer-=dt;if(magnetTimer<=0){magnetActive=false;magnetTimer=0;}}
+    // Power HUD
+    var sb=document.getElementById("shieldBadge");if(sb)sb.className="pow-badge"+(shieldActive?" active":"");
+    var mb=document.getElementById("magnetBadge");if(mb)mb.className="pow-badge"+(magnetActive?" active":"");
 
     // Combo HUD
     var cb=document.getElementById("comboBar");
@@ -398,7 +570,17 @@ function gameLoop(ts){
       if(!ob.coinSpawned&&ob.x<W*.5){
         ob.coinSpawned=true;
         var coinProb=(obstacleScore+1)<30?.25:Math.min(.45,.25+((obstacleScore+1)-30)*.003333);
-        if(Math.random()<coinProb)spawnCoin(ob);
+        if(Math.random()<coinProb){
+          // coin rain: 3 coins at once after score 100
+          if(score>=100&&Math.random()<.15){spawnCoinRain(ob);}
+          else{spawnCoin(ob);}
+        }
+        // power-up spawn after score 100
+        if(score>=100){
+          var pu=Math.random();
+          if(pu<.06)spawnPowerUp(ob,"shield");       // 6% shield
+          else if(pu<.12)spawnPowerUp(ob,"magnet");  // 6% magnet
+        }
       }
       if(!ob.scored&&ob.x+ob.w<ship.x){
         ob.scored=true;obstacleScore++;
@@ -410,6 +592,9 @@ function gameLoop(ts){
         document.getElementById("scoreDisplay").textContent=score;
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
         if(combo>=5)showComboPopup(combo,pts);
+        if(obstacleScore===100&&!announce100.active){
+          announce100.active=true;announce100.alpha=1;
+        }
         if(obstacleScore%10===0&&obstacleScore!==lastMsgScore){
           lastMsgScore=obstacleScore;
           triggerMsg(MSGS[Math.floor(Math.random()*MSGS.length)]);
@@ -420,12 +605,21 @@ function gameLoop(ts){
 
     for(var i=0;i<obstacles.length;i++)drawObs(obstacles[i]);
     drawCoins(spd,dt);
+    drawPowerUps(spd,dt);
+    drawAnnounce100();
 
     var sx=ship.x+7*scaleF,sy=ship.y+7*scaleF,sw=ship.w-14*scaleF,sh=ship.h-14*scaleF;
     var hit=ship.y+ship.h>H||ship.y<0;
     for(var i=0;i<obstacles.length;i++){
       var ob=obstacles[i];
       if(sx+sw>ob.x&&sx<ob.x+ob.w&&(sy<ob.topY||sy+sh>ob.topY+ob.gap))hit=true;
+    }
+    // Shield absorbs one hit
+    if(hit&&shieldActive){
+      hit=false;shieldActive=false;shieldTimer=0;
+      spawnH(ship.x+ship.w/2,ship.y+ship.h/2,12);
+      // flash the ship
+      ship.shieldFlash=8;
     }
     if(hit){
       loopActive=false;
@@ -444,6 +638,9 @@ function gameLoop(ts){
     }
 
     drawAmanda(ship.x,ship.y,ship.w,ship.h,tilt,false);
+    if(ship.shieldFlash>0){ship.shieldFlash--;} 
+    if(shieldActive){drawShieldAura();}
+    if(magnetActive){drawMagnetAura();}
     drawComboPopup();
     drawMsg();
 
@@ -467,6 +664,8 @@ function showMenu(){
   stopLoop();
   if(ctx)ctx.clearRect(0,0,W,H);
   var cb=document.getElementById("comboBar");if(cb)cb.classList.remove("active");
+  var sb=document.getElementById("shieldBadge");if(sb)sb.classList.remove("active");
+  var mb=document.getElementById("magnetBadge");if(mb)mb.classList.remove("active");
   var gw=document.getElementById("game-wrap");if(gw)gw.style.visibility="hidden";
   ["gameover","ranking","namePrompt"].forEach(function(id){
     var el=document.getElementById(id);if(el)el.classList.add("hidden");
@@ -489,6 +688,12 @@ function startGame(){
   document.getElementById("gameover").classList.add("hidden");
   document.getElementById("hud").classList.add("visible");
   initGame();gameState="playing";loopActive=true;requestAnimationFrame(gameLoop);
+  // First time tutorial
+  if(totalGames===1&&!localStorage.getItem("amandaTutorialSeen")){
+    setTimeout(function(){
+      if(typeof showTutorial==="function")showTutorial();
+    },500);
+  }
 }
 function showGameOver(){
   document.getElementById("gameover").classList.remove("hidden");

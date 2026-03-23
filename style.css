@@ -305,3 +305,25 @@ html,body{width:100%;height:100%;background:var(--deep);overflow:hidden;font-fam
 .combo-pill { background:rgba(0,0,0,.55); border:1px solid rgba(255,214,10,.5); border-radius:99px; padding:.25em .9em; display:flex; align-items:center; gap:.4rem; }
 .combo-x { font-family:'Pacifico',cursive; font-size:1rem; color:var(--gold); line-height:1; }
 .combo-label { font-size:.6rem; letter-spacing:.15em; color:rgba(255,214,10,.7); text-transform:uppercase; font-weight:700; }
+
+/* ── Tutorial overlay ── */
+#tutorial { background: rgba(5,0,13,.97); }
+.tutorial-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,45,120,.2); border-radius:20px; padding:1.5rem; max-width:310px; width:90%; display:flex; flex-direction:column; gap:.9rem; }
+.tutorial-title { font-family:'Pacifico',cursive; font-size:1.2rem; color:#fff; text-align:center; }
+.tutorial-items { display:flex; flex-direction:column; gap:.75rem; }
+.tutorial-item { display:flex; align-items:center; gap:.9rem; background:rgba(255,255,255,.04); border-radius:12px; padding:.7rem .9rem; }
+.tut-icon { font-size:1.4rem; width:36px; text-align:center; flex-shrink:0; }
+.tut-text { display:flex; flex-direction:column; gap:.15rem; }
+.tut-text strong { font-size:.85rem; font-weight:700; color:#fff; }
+.tut-text span { font-size:.7rem; color:rgba(255,179,204,.7); line-height:1.4; }
+.tut-shield { background:rgba(55,138,221,.15); border-radius:8px; }
+.tut-magnet { background:rgba(255,45,120,.12); border-radius:8px; }
+.tut-rain { background:rgba(255,214,10,.1); border-radius:8px; }
+.tut-hint { font-size:.62rem; text-align:center; color:rgba(255,255,255,.25); letter-spacing:.08em; margin:0; font-weight:600; }
+
+/* ── Power-up HUD icons ── */
+#powerHud { position:fixed; bottom:80px; right:12px; z-index:21; display:flex; flex-direction:column; gap:6px; pointer-events:none; }
+.pow-badge { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.55); border-radius:99px; padding:4px 10px 4px 6px; opacity:0; transition:opacity .3s; }
+.pow-badge.active { opacity:1; }
+.pow-badge span { font-size:14px; }
+.pow-badge .pow-name { font-size:.6rem; font-weight:700; letter-spacing:.1em; color:#fff; text-transform:uppercase; }
