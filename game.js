@@ -19,21 +19,73 @@ var bestCombo=parseInt(localStorage.getItem("amandaBestCombo")||"0");
 
 // ── Procedural Music Engine ───────────────────────────────────
 var musicPlaying=false,musicScheduler=null;
-var musicStep=0,musicTempo=140,musicGain=null,musicMaster=null;
+var musicStep=0,musicBar=0,musicTempo=140,musicGain=null,musicMaster=null;
+var kickBuffer=null,hatBuffer=null;
 
-// Pentatonic scale in A minor for romantic/emotional feel
-var SCALE=[220,246.94,261.63,293.66,329.63,369.99,392,440,493.88,523.25];
-// Bass root notes
-var BASS=[55,55,65.41,55];
-// Melody pattern (index into SCALE, -1=rest)
-var MELODY=[0,2,4,6,4,2,0,-1, 3,5,7,5,3,1,-1,-1,
-            2,4,6,8,6,4,2,-1, 0,3,5,7,5,3,0,-1];
-var BEAT=[1,0,0,0,1,0,1,0, 1,0,0,0,1,0,1,0]; // kick pattern
+var NOTE_FREQ={
+  A2:110,C3:130.81,D3:146.83,E3:164.81,G3:196,
+  A3:220,C4:261.63,D4:293.66,E4:329.63,G4:392,A4:440,C5:523.25,D5:587.33,E5:659.25,G5:783.99
+};
+
+var MUSIC_SECTIONS=[
+  {
+    name:"dreamy",
+    bass:[NOTE_FREQ.A2,NOTE_FREQ.C3,NOTE_FREQ.G3,NOTE_FREQ.E3],
+    melody:[0,2,4,7,4,2,0,-1, 2,4,5,4,2,0,-1,-1, 4,5,7,9,7,5,4,-1, 2,4,7,5,4,2,0,-1],
+    arp:[0,4,7,4, 2,5,7,5, 0,4,7,9, 7,5,4,2],
+    kick:[1,0,0,0,1,0,0,0,1,0,1,0,1,0,0,0],
+    hat:[1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0],
+    lead:"triangle",
+    pad:"sine"
+  },
+  {
+    name:"lift",
+    bass:[NOTE_FREQ.A2,NOTE_FREQ.D3,NOTE_FREQ.E3,NOTE_FREQ.C3],
+    melody:[0,2,4,5,7,5,4,2, 4,5,7,9,7,5,4,2, 5,7,9,10,9,7,5,4, 2,4,5,7,5,4,2,-1],
+    arp:[0,5,9,5, 2,5,9,5, 4,7,10,7, 2,5,9,5],
+    kick:[1,0,0,1,1,0,0,0,1,0,1,0,1,0,0,1],
+    hat:[1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,0],
+    lead:"triangle",
+    pad:"triangle"
+  },
+  {
+    name:"rush",
+    bass:[NOTE_FREQ.A2,NOTE_FREQ.G3,NOTE_FREQ.D3,NOTE_FREQ.E3],
+    melody:[0,4,7,9,7,4,0,2, 4,7,9,10,9,7,4,2, 5,7,10,12,10,7,5,4, 2,4,7,9,7,4,2,-1],
+    arp:[0,7,9,7, 4,7,10,7, 2,5,9,5, 4,7,9,7],
+    kick:[1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,0],
+    hat:[1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1],
+    lead:"sawtooth",
+    pad:"triangle"
+  }
+];
+var MUSIC_SCALE=[NOTE_FREQ.A3,NOTE_FREQ.C4,NOTE_FREQ.D4,NOTE_FREQ.E4,NOTE_FREQ.G4,NOTE_FREQ.A4,NOTE_FREQ.C5,NOTE_FREQ.D5,NOTE_FREQ.E5,NOTE_FREQ.G5];
+
+function getMusicSection(bar){
+  var phraseBar=bar||0;
+  if(score>=140)return MUSIC_SECTIONS[2];
+  if(score>=80)return MUSIC_SECTIONS[(phraseBar%8<4)?1:2];
+  if(score>=40)return MUSIC_SECTIONS[(phraseBar%8<4)?0:1];
+  return MUSIC_SECTIONS[phraseBar%8<4?0:1];
+}
 
 function getMusicTempo(){
   if(!musicPlaying)return 140;
   if(score>=100)return Math.min(200,140+(score-100)*.6);
   return 140;
+}
+
+function ensureMusicBuffers(ac){
+  if(!kickBuffer){
+    kickBuffer=ac.createBuffer(1,Math.floor(ac.sampleRate*0.08),ac.sampleRate);
+    var kd=kickBuffer.getChannelData(0);
+    for(var i=0;i<kd.length;i++)kd[i]=(Math.random()*2-1)*Math.pow(1-i/kd.length,3);
+  }
+  if(!hatBuffer){
+    hatBuffer=ac.createBuffer(1,Math.floor(ac.sampleRate*0.04),ac.sampleRate);
+    var hd=hatBuffer.getChannelData(0);
+    for(var j=0;j<hd.length;j++)hd[j]=(Math.random()*2-1)*Math.pow(1-j/hd.length,4);
+  }
 }
 
 function musicNote(freq,start,dur,vol,type,dest){
@@ -50,72 +102,89 @@ function musicNote(freq,start,dur,vol,type,dest){
   }catch(e){}
 }
 
+function playNoiseHit(buffer,start,vol,filterType,filterFreq,dur){
+  try{
+    var ac=getAC();
+    var src=ac.createBufferSource(),g=ac.createGain(),f=ac.createBiquadFilter();
+    src.buffer=buffer;
+    f.type=filterType;
+    f.frequency.value=filterFreq;
+    src.connect(f);f.connect(g);g.connect(musicMaster);
+    g.gain.setValueAtTime(vol,start);
+    g.gain.exponentialRampToValueAtTime(0.001,start+dur);
+    src.start(start);
+  }catch(e){}
+}
+
+function schedulePad(freq,start,step,section){
+  musicNote(freq,start,step*12,.028,section.pad,musicMaster);
+  musicNote(freq*1.5,start+step*2,step*8,.018,"sine",musicMaster);
+}
+
 function scheduleMusic(){
   if(!musicPlaying)return;
   try{
     var ac=getAC();
+    ensureMusicBuffers(ac);
     var now=ac.currentTime;
     var tempo=getMusicTempo();
     var step=60/tempo/4; // 16th note duration
 
-    // Schedule 2 bars ahead (32 steps)
-    var steps=32;
+    // Schedule 4 bars ahead for less repetition and smoother transitions
+    var steps=64;
     for(var i=0;i<steps;i++){
       var t=now+(i*step);
-      var si=(musicStep+i)%MELODY.length;
-      var bi=si%BEAT.length;
+      var globalStep=musicStep+i;
+      var sectionBar=Math.floor(globalStep/16);
+      var section=getMusicSection(sectionBar);
+      var si=globalStep%section.melody.length;
+      var bi=globalStep%section.kick.length;
+      var barIndex=sectionBar%section.bass.length;
+      var barStep=globalStep%16;
 
       // Kick drum (filtered noise burst)
-      if(BEAT[bi]&&si%2===0){
-        try{
-          var buf=ac.createBuffer(1,Math.floor(ac.sampleRate*0.08),ac.sampleRate);
-          var d=buf.getChannelData(0);
-          for(var j=0;j<d.length;j++)d[j]=(Math.random()*2-1)*Math.pow(1-j/d.length,3);
-          var src=ac.createBufferSource(),kg=ac.createGain(),kf=ac.createBiquadFilter();
-          src.buffer=buf;kf.type="lowpass";kf.frequency.value=180;
-          src.connect(kf);kf.connect(kg);kg.connect(musicMaster);
-          kg.gain.setValueAtTime(.25,t);kg.gain.exponentialRampToValueAtTime(.001,t+.08);
-          src.start(t);
-        }catch(e){}
+      if(section.kick[bi]){
+        playNoiseHit(kickBuffer,t,.22,"lowpass",score>=100?220:180,.08);
       }
 
       // Hi-hat (every 8th note)
-      if(si%2===0){
-        try{
-          var hbuf=ac.createBuffer(1,Math.floor(ac.sampleRate*0.04),ac.sampleRate);
-          var hd=hbuf.getChannelData(0);
-          for(var j=0;j<hd.length;j++)hd[j]=(Math.random()*2-1)*Math.pow(1-j/hd.length,4);
-          var hs=ac.createBufferSource(),hg=ac.createGain(),hf=ac.createBiquadFilter();
-          hs.buffer=hbuf;hf.type="highpass";hf.frequency.value=8000;
-          hs.connect(hf);hf.connect(hg);hg.connect(musicMaster);
-          hg.gain.setValueAtTime(.06,t);hg.gain.exponentialRampToValueAtTime(.001,t+.04);
-          hs.start(t);
-        }catch(e){}
+      if(section.hat[bi]){
+        playNoiseHit(hatBuffer,t,score>=100?.05:.038,"highpass",8000,.04);
       }
 
-      // Bass (every bar)
-      if(si%16===0){
-        var bassFreq=BASS[Math.floor(si/16)%BASS.length];
-        musicNote(bassFreq,t,step*6,.12,"sawtooth",musicMaster);
-        musicNote(bassFreq*2,t,step*6,.06,"sawtooth",musicMaster);
+      // Bass and pad at the start of each bar
+      if(barStep===0){
+        var bassFreq=section.bass[barIndex];
+        musicNote(bassFreq,t,step*8,.13,"sawtooth",musicMaster);
+        musicNote(bassFreq*2,t+step*0.5,step*6,.045,"triangle",musicMaster);
+        schedulePad(bassFreq*2,t,step,section);
+      }
+
+      // Arpeggio fills the space between melody phrases
+      if(barStep%2===0){
+        var arpIndex=section.arp[globalStep%section.arp.length];
+        if(arpIndex>=0&&MUSIC_SCALE[arpIndex]){
+          musicNote(MUSIC_SCALE[arpIndex],t,step*1.2,score>=100?.028:.02,"sine",musicMaster);
+        }
       }
 
       // Melody
-      if(MELODY[si]>=0){
-        var mFreq=SCALE[MELODY[si]];
-        var mVol=si%8===0?.09:.06;
-        var mDur=si%4===0?step*3:step*1.5;
-        musicNote(mFreq,t,mDur,mVol,"triangle",musicMaster);
+      if(section.melody[si]>=0&&MUSIC_SCALE[section.melody[si]]){
+        var mFreq=MUSIC_SCALE[section.melody[si]];
+        var mVol=barStep===0?.1:barStep%4===0?.078:.06;
+        var mDur=barStep%8===0?step*3.4:barStep%4===0?step*2.2:step*1.35;
+        musicNote(mFreq,t,mDur,mVol,section.lead,musicMaster);
         // harmony a 5th above on strong beats
-        if(si%8===0&&MELODY[si]+4<SCALE.length){
-          musicNote(SCALE[MELODY[si]+4]*0.5,t,mDur*.8,mVol*.4,"sine",musicMaster);
+        if(barStep%8===0&&section.melody[si]+2<MUSIC_SCALE.length){
+          musicNote(MUSIC_SCALE[section.melody[si]+2]*0.5,t,mDur*.9,mVol*.4,"sine",musicMaster);
         }
       }
     }
 
-    musicStep=(musicStep+steps)%MELODY.length;
+    musicStep+=steps;
+    musicBar+=steps/16;
     // Reschedule
-    musicScheduler=setTimeout(scheduleMusic, steps*step*1000*0.7);
+    musicScheduler=setTimeout(scheduleMusic, steps*step*1000*0.55);
   }catch(e){}
 }
 
@@ -126,7 +195,7 @@ function startMusic(){
     musicMaster=ac.createGain();
     musicMaster.gain.value=0.55;
     musicMaster.connect(ac.destination);
-    musicPlaying=true;musicStep=0;
+    musicPlaying=true;musicStep=0;musicBar=0;
     scheduleMusic();
   }catch(e){}
 }
@@ -261,7 +330,6 @@ function sndHit(){
 }
 
 
-// ── Themes ────────────────────────────────────────────────────
 var THEMES={
   hearts:{
     name:"hearts",
@@ -270,8 +338,8 @@ var THEMES={
     bgColors:["rgba(80,5,40,.22)","rgba(40,0,80,.18)","rgba(255,45,120,.1)"],
     starColor:"255,200,220",
     trail:["#ff2d78","#ff6fa0","#ffb3cc","#ff2d78","#ff8cb0"],
-    emojis:["💕","💗","💖","💓","🌸","✨","💝"],
-    floatEmojis:["💕","💗","💖","💓","🌸","✨","💝"]
+    emojis:["\uD83D\uDC95","\uD83D\uDC97","\uD83D\uDC96","\uD83D\uDC93","\uD83C\uDF38","\u2728","\uD83D\uDC9D"],
+    floatEmojis:["\uD83D\uDC95","\uD83D\uDC97","\uD83D\uDC96","\uD83D\uDC93","\uD83C\uDF38","\u2728","\uD83D\uDC9D"]
   },
   galaxy:{
     name:"galaxy",
@@ -280,28 +348,38 @@ var THEMES={
     bgColors:["rgba(20,5,80,.25)","rgba(60,0,120,.2)","rgba(0,200,255,.08)"],
     starColor:"180,160,255",
     trail:["#a78bfa","#7c3aed","#c4b5fd","#818cf8","#e0e7ff"],
-    emojis:["🐱","😺","🐾","🌙","⭐","🌟","🐈"],
-    floatEmojis:["🐱","😺","🐾","🌙","⭐","🌟","🐈"]
+    emojis:["\uD83D\uDC31","\uD83D\uDE3A","\uD83D\uDC3E","\uD83C\uDF19","\u2B50","\uD83C\uDF1F","\uD83D\uDC08"],
+    floatEmojis:["\uD83D\uDC31","\uD83D\uDE3A","\uD83D\uDC3E","\uD83C\uDF19","\u2B50","\uD83C\uDF1F","\uD83D\uDC08"]
   },
-  fire:{
-    name:"fire",
-    pipe:["#3d0800","#701500","#200500"],
-    pipeStroke:"rgba(255,120,0,.7)",
-    bgColors:["rgba(180,40,0,.2)","rgba(100,20,0,.18)","rgba(255,100,0,.1)"],
-    starColor:"255,200,100",
-    trail:["#ff4500","#ff6600","#ff8c00","#ffa500","#ffcc00"],
-    emojis:["🎂","🧁","🍰","🎉","🎈","🥳","🍭"],
-    floatEmojis:["🎂","🧁","🍰","🎉","🎈","🥳","🍭"]
+  garden:{
+    name:"garden",
+    pipe:["#123b1f","#1f5a33","#0c2616"],
+    pipeStroke:"rgba(114,214,140,.65)",
+    bgColors:["rgba(30,90,45,.2)","rgba(110,185,110,.12)","rgba(255,212,235,.08)"],
+    starColor:"180,240,190",
+    trail:["#7ed957","#51cf66","#b7ef8a","#f783ac","#ffd43b"],
+    emojis:["\uD83C\uDF37","\uD83C\uDF3B","\uD83E\uDEB4","\uD83C\uDF43","\uD83D\uDC1D","\u2728","\uD83C\uDF53"],
+    floatEmojis:["\uD83C\uDF37","\uD83C\uDF3B","\uD83E\uDEB4","\uD83C\uDF43","\uD83D\uDC1D","\u2728","\uD83C\uDF53"]
   },
-  gold:{
-    name:"gold",
-    pipe:["#1a1000","#3d2800","#0d0800"],
-    pipeStroke:"rgba(255,214,10,.8)",
-    bgColors:["rgba(120,80,0,.22)","rgba(80,40,0,.18)","rgba(255,214,10,.08)"],
-    starColor:"255,230,100",
-    trail:["#ffd60a","#ffb300","#ffe066","#ffc300","#fff3b0"],
-    emojis:["🍬","🍭","🍫","🍩","🍪","🧸","🌈"],
-    floatEmojis:["🍬","🍭","🍫","🍩","🍪","🧸","🌈"]
+  sunset:{
+    name:"sunset",
+    pipe:["#411126","#70204b","#250815"],
+    pipeStroke:"rgba(255,180,120,.72)",
+    bgColors:["rgba(255,120,90,.22)","rgba(255,200,120,.12)","rgba(255,80,140,.08)"],
+    starColor:"255,190,140",
+    trail:["#ff7b54","#ffb26b","#ffd56f","#ff8fab","#ffd6a5"],
+    emojis:["\uD83C\uDF05","\uD83C\uDFD6\uFE0F","\uD83E\uDEE9","\uD83E\uDD65","\uD83C\uDF79","\u2728","\uD83C\uDF3A"],
+    floatEmojis:["\uD83C\uDF05","\uD83C\uDFD6\uFE0F","\uD83E\uDEE9","\uD83E\uDD65","\uD83C\uDF79","\u2728","\uD83C\uDF3A"]
+  },
+  carnival:{
+    name:"carnival",
+    pipe:["#2a0f3f","#51206f","#180826"],
+    pipeStroke:"rgba(255,224,112,.8)",
+    bgColors:["rgba(255,210,80,.18)","rgba(255,90,160,.12)","rgba(120,70,255,.1)"],
+    starColor:"255,220,130",
+    trail:["#ffd60a","#ff8fab","#8ce99a","#74c0fc","#c77dff"],
+    emojis:["\uD83C\uDFA0","\uD83C\uDFA1","\uD83C\uDF6C","\uD83C\uDF89","\uD83C\uDF81","\uD83C\uDF08","\u2728"],
+    floatEmojis:["\uD83C\uDFA0","\uD83C\uDFA1","\uD83C\uDF6C","\uD83C\uDF89","\uD83C\uDF81","\uD83C\uDF08","\u2728"]
   }
 };
 var _currentTheme=THEMES.hearts;
@@ -310,8 +388,9 @@ var _bgFloaters=[]; // DOM spans for background emojis
 
 function getTheme(){
   // Use obstacleScore for consistent thresholds (independent of combo multipliers)
-  if(obstacleScore>=120)return THEMES.gold;
-  if(obstacleScore>=80)return THEMES.fire;
+  if(obstacleScore>=140)return THEMES.carnival;
+  if(obstacleScore>=100)return THEMES.sunset;
+  if(obstacleScore>=80)return THEMES.garden;
   if(obstacleScore>=40)return THEMES.galaxy;
   return THEMES.hearts;
 }
