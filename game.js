@@ -32,7 +32,6 @@ var BEAT=[1,0,0,0,1,0,1,0, 1,0,0,0,1,0,1,0]; // kick pattern
 
 function getMusicTempo(){
   if(!musicPlaying)return 140;
-  if(freneticoActive)return 200; // BPM máximo durante frenético
   if(score>=100)return Math.min(200,140+(score-100)*.6);
   return 140;
 }
@@ -215,8 +214,9 @@ var comboPopup={val:0,pts:1,alpha:0,y:0,active:false};
 var shieldActive=false,shieldTimer=0,SHIELD_DURATION=420; // frames
 var invincible=false,invincibleTimer=0,INVINCIBLE_DURATION=60; // ~1s invincibility after shield hit
 var magnetActive=false,magnetTimer=0,MAGNET_DURATION=450;
-var freneticoActive=false,freneticoTimer=0,FRENETICO_DURATION=300; // 5s @ 60fps
+var freneticoActive=false,freneticoTimer=0,FRENETICO_DURATION=300; // reservado — não usado
 var ghostActive=false,ghostTimer=0,GHOST_DURATION=180;            // 3s @ 60fps
+var starActive=false,starTimer=0,STAR_DURATION=600;               // 10s @ 60fps
 var announce100={alpha:0,active:false};
 var powerUps=[]; // {x,y,type,r,pulse}
 
@@ -438,6 +438,7 @@ function initGame(){
   invincible=false;invincibleTimer=0;
   freneticoActive=false;freneticoTimer=0;
   ghostActive=false;ghostTimer=0;
+  starActive=false;starTimer=0;
   announce100.active=false;announce100.alpha=0;powerUps=[];_lastMilestone=0;
   msgPopup.active=false;
   gameReady=false;tilt=0;lastTime=0;lastMsgScore=0;
@@ -545,16 +546,18 @@ function drawCoins(spd,dt){
     var colDist=c.r+ship.w*.45;
     if(dx*dx+dy*dy<colDist*colDist){
       c.collected=true;coinScore++;
-      combo++;comboTimer=COMBO_TIMEOUT;
+      // Só encadeia combo se o timer ainda estiver activo; senão começa em 1
+      if(comboTimer>0){combo++;}else{combo=1;}
+      comboTimer=COMBO_TIMEOUT;
       var comboMult=combo>=10?3:combo>=5?2:1;
       if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
-      var pts=comboMult*(freneticoActive?2:1);
+      var pts=comboMult;
       score+=pts;totalCoinsEver++;
       localStorage.setItem("amandaTotalCoins",totalCoinsEver);
       document.getElementById("scoreDisplay").textContent=score;
       checkScoreMilestones();
       sndCoin();spawnH(c.x,c.y,6);
-      if(combo>=5||freneticoActive)showComboPopup(combo,comboMult,freneticoActive);
+      if(combo>=5)showComboPopup(combo,comboMult,false);
       coins.splice(i,1);continue;
     }
     var scale=1+Math.sin(c.pulse)*.12;
@@ -644,6 +647,35 @@ function buildMagnetCanvas(r){
 }
 var _shieldImg=null,_magnetImg=null,_shieldR=0,_magnetR=0;
 var _freneticoImg=null,_ghostImg=null,_freneticoR=0,_ghostR=0;
+var _starImg=null,_starR=0;
+
+function buildStarCanvas(r){
+  var size=Math.ceil(r*4);
+  var oc=document.createElement("canvas");oc.width=oc.height=size;
+  var c=oc.getContext("2d"),cx=size/2,cy=size/2;
+  // glow arco-íris
+  var glow=c.createRadialGradient(cx,cy,0,cx,cy,r*1.8);
+  glow.addColorStop(0,"rgba(255,255,100,.35)");
+  glow.addColorStop(1,"rgba(255,255,100,0)");
+  c.beginPath();c.arc(cx,cy,r*1.8,0,Math.PI*2);c.fillStyle=glow;c.fill();
+  // body dourado
+  var sg=c.createRadialGradient(cx-r*.3,cy-r*.3,0,cx,cy,r);
+  sg.addColorStop(0,"#fffde0");sg.addColorStop(.4,"#ffd60a");sg.addColorStop(1,"#ff8c00");
+  c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fillStyle=sg;c.fill();
+  c.strokeStyle="rgba(255,240,100,.9)";c.lineWidth=1.5;c.stroke();
+  // estrela de 5 pontas
+  c.fillStyle="rgba(255,255,255,.92)";
+  c.beginPath();
+  for(var i=0;i<10;i++){
+    var angle=i*Math.PI/5-Math.PI/2;
+    var rad=i%2===0?r*.62:r*.28;
+    var px=cx+Math.cos(angle)*rad;
+    var py=cy+Math.sin(angle)*rad;
+    i===0?c.moveTo(px,py):c.lineTo(px,py);
+  }
+  c.closePath();c.fill();
+  return oc;
+}
 
 function buildFreneticoCanvas(r){
   var size=Math.ceil(r*4);
@@ -708,6 +740,7 @@ function getShieldImg(r){if(r!==_shieldR){_shieldR=r;_shieldImg=buildShieldCanva
 function getMagnetImg(r){if(r!==_magnetR){_magnetR=r;_magnetImg=buildMagnetCanvas(r);}return _magnetImg;}
 function getFreneticoImg(r){if(r!==_freneticoR){_freneticoR=r;_freneticoImg=buildFreneticoCanvas(r);}return _freneticoImg;}
 function getGhostImg(r){if(r!==_ghostR){_ghostR=r;_ghostImg=buildGhostCanvas(r);}return _ghostImg;}
+function getStarImg(r){if(r!==_starR){_starR=r;_starImg=buildStarCanvas(r);}return _starImg;}
 
 // ── Spawn functions ───────────────────────────────────────────
 function spawnCoinRain(ob){
@@ -744,18 +777,18 @@ function drawPowerUps(spd,dt){
       } else if(p.type==="magnet"){
         magnetActive=true;magnetTimer=MAGNET_DURATION;
         spawnH(p.x,p.y,8);playBeep(440,.15,.2,"sine");setTimeout(function(){playBeep(660,.1,.15,"sine");},100);
-      } else if(p.type==="frenetico"){
-        freneticoActive=true;freneticoTimer=FRENETICO_DURATION;
-        spawnH(p.x,p.y,12);
-        playBeep(330,.06,.2,"sawtooth");
-        setTimeout(function(){playBeep(440,.06,.2,"sawtooth");},60);
-        setTimeout(function(){playBeep(660,.12,.25,"sawtooth");},120);
       } else if(p.type==="ghost"){
         ghostActive=true;ghostTimer=GHOST_DURATION;
         spawnH(p.x,p.y,10);
         playBeep(600,.1,.15,"sine");
         setTimeout(function(){playBeep(800,.1,.12,"sine");},80);
         setTimeout(function(){playBeep(1000,.15,.1,"sine");},160);
+      } else if(p.type==="star"){
+        starActive=true;starTimer=STAR_DURATION;
+        spawnH(p.x,p.y,16);
+        // jingle ascendente tipo Mario
+        var notes=[523,659,784,1047];
+        notes.forEach(function(n,i){setTimeout(function(){playBeep(n,.12,.2,"triangle");},i*80);});
       }
       powerUps.splice(i,1);continue;
     }
@@ -764,7 +797,7 @@ function drawPowerUps(spd,dt){
     var img;
     if(p.type==="shield")img=getShieldImg(p.r);
     else if(p.type==="magnet")img=getMagnetImg(p.r);
-    else if(p.type==="frenetico")img=getFreneticoImg(p.r);
+    else if(p.type==="star")img=getStarImg(p.r);
     else img=getGhostImg(p.r);
     var sz=img.width;
     ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
@@ -802,26 +835,35 @@ function drawMagnetAura(){
   ctx.restore();
 }
 
-function drawFreneticoAura(){
+function drawStarAura(){
   var now=Date.now();
-  // fundo vermelho pulsante sobre o canvas inteiro
-  var pulse=.08+.06*Math.sin(now*.018);
+  var t=now*.002;
+  // overlay arco-íris pulsante no canvas inteiro
+  var hue=Math.floor((t*40)%360);
   ctx.save();
-  ctx.fillStyle="rgba(255,60,0,"+pulse+")";
+  ctx.fillStyle="hsla("+hue+",100%,60%,.07)";
   ctx.fillRect(0,0,W,H);
-  // anel de fogo à volta da nave
-  var r=ship.w*.8;
-  var alpha=.5+.2*Math.sin(now*.012);
-  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,0,Math.PI*2);
-  ctx.strokeStyle="rgba(255,140,0,"+alpha+")";ctx.lineWidth=4*scaleF;ctx.stroke();
-  ctx.strokeStyle="rgba(255,220,0,"+(alpha*.6)+")";ctx.lineWidth=2*scaleF;ctx.stroke();
-  // timer bar (arco laranja)
-  var frac=freneticoTimer/FRENETICO_DURATION;
-  ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,
-    -Math.PI/2,-Math.PI/2+Math.PI*2*frac);
-  ctx.strokeStyle="rgba(255,200,0,.95)";ctx.lineWidth=3*scaleF;ctx.stroke();
+  // anel rotativo de 7 cores à volta da nave
+  var cx=ship.x+ship.w/2,cy=ship.y+ship.h/2;
+  var r=ship.w*.9;
+  var colors=["#ff0000","#ff7700","#ffee00","#00cc00","#0088ff","#8800ff","#ff00cc"];
+  for(var i=0;i<colors.length;i++){
+    var a0=t+i*(Math.PI*2/colors.length);
+    var a1=a0+Math.PI*2/colors.length*.85;
+    ctx.beginPath();ctx.arc(cx,cy,r,a0,a1);
+    ctx.strokeStyle=colors[i];ctx.lineWidth=3.5*scaleF;
+    ctx.globalAlpha=.75+.2*Math.sin(t*3+i);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  // partículas de estrelinhas esporádicas
+  if(Math.random()<.4)spawnH(ship.x+ship.w/2,ship.y+ship.h/2,3);
+  // timer bar branca
+  var frac=starTimer/STAR_DURATION;
+  ctx.beginPath();ctx.arc(cx,cy,r+5*scaleF,-Math.PI/2,-Math.PI/2+Math.PI*2*frac);
+  ctx.strokeStyle="rgba(255,255,255,.8)";ctx.lineWidth=2*scaleF;ctx.stroke();
   ctx.restore();
 }
+
 function drawGhostAura(){
   var now=Date.now();
   // nave semi-transparente — feito no drawAmanda com globalAlpha
@@ -900,23 +942,23 @@ function gameLoop(ts){
 
     // Theme update
     applyTheme(getTheme());
-    // Combo decay
+    // Combo decay — reset to 0 if timer expires between events
     if(combo>0){comboTimer-=dt*1.5;if(comboTimer<=0){combo=0;comboTimer=0;}}
     // Shield timer
     if(shieldActive){shieldTimer-=dt;if(shieldTimer<=0){shieldActive=false;shieldTimer=0;}}
     // Invincibility timer (after shield absorbs a hit)
     if(invincible){invincibleTimer-=dt;if(invincibleTimer<=0){invincible=false;invincibleTimer=0;}}
-    // Frenético timer
-    if(freneticoActive){freneticoTimer-=dt;if(freneticoTimer<=0){freneticoActive=false;freneticoTimer=0;}}
     // Ghost timer
     if(ghostActive){ghostTimer-=dt;if(ghostTimer<=0){ghostActive=false;ghostTimer=0;}}
+    // Star timer
+    if(starActive){starTimer-=dt;if(starTimer<=0){starActive=false;starTimer=0;}}
     // Magnet timer
     if(magnetActive){magnetTimer-=dt;if(magnetTimer<=0){magnetActive=false;magnetTimer=0;}}
     // Power HUD
     var sb=document.getElementById("shieldBadge");if(sb)sb.className="pow-badge"+(shieldActive?" active":"");
     var mb=document.getElementById("magnetBadge");if(mb)mb.className="pow-badge"+(magnetActive?" active":"");
-    var fb=document.getElementById("freneticoBadge");if(fb)fb.className="pow-badge"+(freneticoActive?" active":"");
     var gb=document.getElementById("ghostBadge");if(gb)gb.className="pow-badge"+(ghostActive?" active":"");
+    var stb=document.getElementById("starBadge");if(stb)stb.className="pow-badge"+(starActive?" active":"");
 
     // Combo HUD
     var cb=document.getElementById("comboBar");
@@ -951,7 +993,6 @@ function gameLoop(ts){
 
     var ramp=Math.max(0,score-40);
     var spd=(2.571+ramp*.01575)*scaleF;
-    if(freneticoActive)spd*=2; // velocidade dupla
 
     for(var i=obstacles.length-1;i>=0;i--){
       var ob=obstacles[i];ob.x-=spd*dt;
@@ -974,36 +1015,35 @@ function gameLoop(ts){
         if(score>=60){
           var pu=Math.random();
           if(score>=100){
-            // Todos os 4 disponíveis
-            if(pu<.06)      spawnPowerUp(ob,"shield");     // 6%
-            else if(pu<.12) spawnPowerUp(ob,"magnet");     // 6%
-            else if(pu<.17) spawnPowerUp(ob,"frenetico");  // 5%
-            else if(pu<.21) spawnPowerUp(ob,"ghost");      // 4%
+            if(pu<.03)      spawnPowerUp(ob,"star");      // 3% ⭐ raro
+            else if(pu<.09) spawnPowerUp(ob,"shield");    // 6%
+            else if(pu<.15) spawnPowerUp(ob,"magnet");    // 6%
+            else if(pu<.19) spawnPowerUp(ob,"ghost");     // 4%
           } else if(score>=80){
-            // Frenético e ghost surgem antes do escudo/íman completo
-            if(pu<.07)      spawnPowerUp(ob,"frenetico");  // 7%
-            else if(pu<.13) spawnPowerUp(ob,"ghost");      // 6%
-            else if(pu<.18) spawnPowerUp(ob,"shield");     // 5%
-            else if(pu<.22) spawnPowerUp(ob,"magnet");     // 4%
+            if(pu<.03)      spawnPowerUp(ob,"star");      // 3% ⭐ raro
+            else if(pu<.11) spawnPowerUp(ob,"ghost");     // 8%
+            else if(pu<.16) spawnPowerUp(ob,"shield");    // 5%
+            else if(pu<.20) spawnPowerUp(ob,"magnet");    // 4%
           } else {
-            // score 60–79: só frenético e ghost (mais fácil de usar)
-            if(pu<.08)      spawnPowerUp(ob,"frenetico");  // 8%
-            else if(pu<.14) spawnPowerUp(ob,"ghost");      // 6%
+            if(pu<.03)      spawnPowerUp(ob,"star");      // 3% ⭐ raro
+            else if(pu<.13) spawnPowerUp(ob,"ghost");     // 10%
           }
         }
       }
       if(!ob.scored&&ob.x+ob.w<ship.x){
         ob.scored=true;obstacleScore++;
-        combo++;comboTimer=COMBO_TIMEOUT;
+        // Só encadeia combo se o timer ainda estiver activo; senão começa em 1
+        if(comboTimer>0){combo++;}else{combo=1;}
+        comboTimer=COMBO_TIMEOUT;
         var comboMult=combo>=10?3:combo>=5?2:1;
         if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
-        var pts=comboMult*(freneticoActive?2:1);
+        var pts=comboMult;
         score+=pts;totalObstaclesEver++;
         localStorage.setItem("amandaTotalObs",totalObstaclesEver);
         document.getElementById("scoreDisplay").textContent=score;
         checkScoreMilestones();
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
-        if(combo>=5||freneticoActive)showComboPopup(combo,comboMult,freneticoActive);
+        if(combo>=5)showComboPopup(combo,comboMult,false);
 
         if(obstacleScore%10===0&&obstacleScore!==lastMsgScore){
           lastMsgScore=obstacleScore;
@@ -1019,8 +1059,9 @@ function gameLoop(ts){
     drawAnnounce100();
 
     var sx=ship.x+7*scaleF,sy=ship.y+7*scaleF,sw=ship.w-14*scaleF,sh=ship.h-14*scaleF;
-    var hit=ship.y+ship.h>H||ship.y<0; // chão e tecto sempre matam
-    if(!invincible&&!ghostActive){
+    // Estrela = invencibilidade total (pipes + chão + tecto)
+    var hit=starActive?false:(ship.y+ship.h>H||ship.y<0);
+    if(!invincible&&!ghostActive&&!starActive){
       for(var i=0;i<obstacles.length;i++){
         var ob=obstacles[i];
         if(sx+sw>ob.x&&sx<ob.x+ob.w&&(sy<ob.topY||sy+sh>ob.topY+ob.gap))hit=true;
@@ -1068,8 +1109,8 @@ function gameLoop(ts){
     }
     if(shieldActive){drawShieldAura();}
     if(magnetActive){drawMagnetAura();}
-    if(freneticoActive){drawFreneticoAura();}
     if(ghostActive){drawGhostAura();}
+    if(starActive){drawStarAura();}
     drawComboPopup();
     drawMsg();
 
@@ -1096,8 +1137,8 @@ function showMenu(){
   var cb=document.getElementById("comboBar");if(cb)cb.classList.remove("active");
   var sb=document.getElementById("shieldBadge");if(sb)sb.classList.remove("active");
   var mb=document.getElementById("magnetBadge");if(mb)mb.classList.remove("active");
-  var fb=document.getElementById("freneticoBadge");if(fb)fb.classList.remove("active");
   var gb=document.getElementById("ghostBadge");if(gb)gb.classList.remove("active");
+  var stb=document.getElementById("starBadge");if(stb)stb.classList.remove("active");
   var gw=document.getElementById("game-wrap");if(gw)gw.style.visibility="hidden";
   ["gameover","ranking","namePrompt"].forEach(function(id){
     var el=document.getElementById(id);if(el)el.classList.add("hidden");
