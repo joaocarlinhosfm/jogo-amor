@@ -115,7 +115,7 @@
 </div>
 
 <div id="game-wrap"><canvas id="gameCanvas"></canvas></div>
-<div id="powerHud"><div class="pow-badge" id="shieldBadge"><span>🛡️</span><span class="pow-name">Escudo</span></div><div class="pow-badge" id="magnetBadge"><span>🧲</span><span class="pow-name">Íman</span></div></div>
+<div id="powerHud"><div class="pow-badge" id="shieldBadge"><span>🛡️</span><span class="pow-name">Escudo</span></div><div class="pow-badge" id="magnetBadge"><span>🧲</span><span class="pow-name">Íman</span></div><div class="pow-badge" id="freneticoBadge"><span>⚡</span><span class="pow-name">Frenético</span></div><div class="pow-badge" id="ghostBadge"><span>👻</span><span class="pow-name">Fantasma</span></div></div>
 <div id="comboBar"><div class="combo-pill"><span class="combo-x" id="comboX">x2</span><span class="combo-label">Combo</span></div></div>
 <div id="hud">
   <div class="hud-score" id="scoreDisplay">0</div>
@@ -163,20 +163,34 @@
 <!-- Tutorial overlay -->
 <div class="screen hidden" id="tutorial">
   <div class="tutorial-card">
-    <div class="tutorial-title">Novidades após 100 pontos! 🎉</div>
+    <div class="tutorial-title">Power-ups desbloqueados! 🎉</div>
     <div class="tutorial-items">
       <div class="tutorial-item">
         <div class="tut-icon tut-shield">🛡️</div>
         <div class="tut-text">
           <strong>Escudo</strong>
-          <span>Absorve uma colisão. Dura 2 segundos.</span>
+          <span>Absorve uma colisão. Após o impacto tens 1s de invencibilidade.</span>
         </div>
       </div>
       <div class="tutorial-item">
         <div class="tut-icon tut-magnet">🧲</div>
         <div class="tut-text">
           <strong>Íman</strong>
-          <span>Atrai todas as moedas. Dura 2.5 segundos.</span>
+          <span>Atrai todas as moedas automaticamente.</span>
+        </div>
+      </div>
+      <div class="tutorial-item">
+        <div class="tut-icon" style="background:linear-gradient(135deg,#ff6600,#ffd60a)">⚡</div>
+        <div class="tut-text">
+          <strong>Frenético</strong>
+          <span>Velocidade dupla e pontos x2 que acumulam com o combo. 5 segundos de adrenalina!</span>
+        </div>
+      </div>
+      <div class="tutorial-item">
+        <div class="tut-icon" style="background:linear-gradient(135deg,#9b59f5,#3a0070)">👻</div>
+        <div class="tut-text">
+          <strong>Fantasma</strong>
+          <span>Atravessa pipes durante 3s. Moedas ainda são colectáveis!</span>
         </div>
       </div>
       <div class="tutorial-item">
@@ -187,7 +201,7 @@
         </div>
       </div>
     </div>
-    <p class="tut-hint">Os power-ups aparecem aleatoriamente nos obstáculos</p>
+    <p class="tut-hint">Power-ups aparecem nos pipes a partir dos 60 pontos 💕</p>
     <button class="cta-btn" id="tutOkBtn" style="margin-top:.5rem">Vamos lá! 💕</button>
   </div>
 </div>
