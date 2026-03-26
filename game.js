@@ -377,23 +377,32 @@ function drawMsg(){
 }
 
 // ── Combo popup ───────────────────────────────────────────────
-function showComboPopup(c,pts){
-  comboPopup.val=c;comboPopup.pts=pts;comboPopup.alpha=1;comboPopup.y=H*.4;comboPopup.active=true;
+function showComboPopup(c,comboMult,isFren){
+  comboPopup.val=c;comboPopup.pts=comboMult;comboPopup.fren=!!isFren;
+  comboPopup.alpha=1;comboPopup.y=H*.4;comboPopup.active=true;
 }
 function drawComboPopup(){
   if(!comboPopup.active)return;
   comboPopup.alpha-=.022;comboPopup.y-=.5*scaleF;
   if(comboPopup.alpha<=0){comboPopup.active=false;return;}
-  var pts=comboPopup.pts;
-  var col=pts>=3?"#ffd60a":"#ff9800";
+  var mult=comboPopup.pts;
+  var fren=comboPopup.fren;
+  var totalMult=mult*(fren?2:1);
+  // cor: dourado só se combo x3, laranja x2, branco x1 com frenético
+  var col=mult>=3?"#ffd60a":mult>=2?"#ff9800":fren?"#ff6600":"#ff9800";
   ctx.save();ctx.globalAlpha=comboPopup.alpha;
   ctx.textAlign="center";ctx.textBaseline="middle";
   ctx.font="bold "+(20*scaleF)+"px 'Quicksand',sans-serif";
   ctx.fillStyle=col;
-  ctx.fillText("x"+pts+" PONTOS!",W/2,comboPopup.y);
+  // linha principal: mostra o multiplicador real total
+  var label=fren&&mult>1?"x"+mult+" x⚡2 = x"+totalMult+" PONTOS!":
+            fren?"x⚡2 PONTOS!":
+            "x"+mult+" PONTOS!";
+  ctx.fillText(label,W/2,comboPopup.y);
   ctx.font="bold "+(10*scaleF)+"px 'Quicksand',sans-serif";
   ctx.fillStyle="rgba(255,255,255,.7)";
-  ctx.fillText("COMBO "+comboPopup.val+" seguidos",W/2,comboPopup.y+16*scaleF);
+  var sub=comboPopup.val>=5?"COMBO "+comboPopup.val+" seguidos":"⚡ FRENÉTICO ativo";
+  ctx.fillText(sub,W/2,comboPopup.y+16*scaleF);
   ctx.restore();
 }
 
@@ -537,15 +546,15 @@ function drawCoins(spd,dt){
     if(dx*dx+dy*dy<colDist*colDist){
       c.collected=true;coinScore++;
       combo++;comboTimer=COMBO_TIMEOUT;
-      var pts=combo>=10?3:combo>=5?2:1;
-      if(freneticoActive)pts*=2; // frenético acumula com combo
-      if(pts>1&&pts>bestCombo){bestCombo=pts;localStorage.setItem("amandaBestCombo",bestCombo);}
+      var comboMult=combo>=10?3:combo>=5?2:1;
+      if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
+      var pts=comboMult*(freneticoActive?2:1);
       score+=pts;totalCoinsEver++;
       localStorage.setItem("amandaTotalCoins",totalCoinsEver);
       document.getElementById("scoreDisplay").textContent=score;
       checkScoreMilestones();
       sndCoin();spawnH(c.x,c.y,6);
-      if(combo>=5||freneticoActive)showComboPopup(combo,pts);
+      if(combo>=5||freneticoActive)showComboPopup(combo,comboMult,freneticoActive);
       coins.splice(i,1);continue;
     }
     var scale=1+Math.sin(c.pulse)*.12;
@@ -986,15 +995,15 @@ function gameLoop(ts){
       if(!ob.scored&&ob.x+ob.w<ship.x){
         ob.scored=true;obstacleScore++;
         combo++;comboTimer=COMBO_TIMEOUT;
-        var pts=combo>=10?3:combo>=5?2:1;
-        if(freneticoActive)pts*=2; // frenético acumula com combo
-        if(pts>1&&pts>bestCombo){bestCombo=pts;localStorage.setItem("amandaBestCombo",bestCombo);}
+        var comboMult=combo>=10?3:combo>=5?2:1;
+        if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
+        var pts=comboMult*(freneticoActive?2:1);
         score+=pts;totalObstaclesEver++;
         localStorage.setItem("amandaTotalObs",totalObstaclesEver);
         document.getElementById("scoreDisplay").textContent=score;
         checkScoreMilestones();
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
-        if(combo>=5||freneticoActive)showComboPopup(combo,pts);
+        if(combo>=5||freneticoActive)showComboPopup(combo,comboMult,freneticoActive);
 
         if(obstacleScore%10===0&&obstacleScore!==lastMsgScore){
           lastMsgScore=obstacleScore;
