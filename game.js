@@ -57,13 +57,23 @@ var MUSIC_SECTIONS=[
     hat:[1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1],
     lead:"sawtooth",
     pad:"triangle"
+  },
+  {
+    name:"suspense",
+    bass:[NOTE_FREQ.A2,NOTE_FREQ.A2,NOTE_FREQ.G3,NOTE_FREQ.E3],
+    melody:[0,-1,2,-1,4,-1,2,-1, 5,-1,4,-1,2,-1,0,-1, 0,-1,2,-1,5,-1,7,-1, 4,-1,2,-1,0,-1,2,-1],
+    arp:[0,-1,4,-1, 2,-1,5,-1, 4,-1,7,-1, 2,-1,4,-1],
+    kick:[1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
+    hat:[0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    lead:"sine",
+    pad:"sawtooth"
   }
 ];
 var MUSIC_SCALE=[NOTE_FREQ.A3,NOTE_FREQ.C4,NOTE_FREQ.D4,NOTE_FREQ.E4,NOTE_FREQ.G4,NOTE_FREQ.A4,NOTE_FREQ.C5,NOTE_FREQ.D5,NOTE_FREQ.E5,NOTE_FREQ.G5];
 
 function getMusicSection(bar){
   var phraseBar=bar||0;
-  if(score>=140)return MUSIC_SECTIONS[2];
+  if(score>=100)return MUSIC_SECTIONS[3];
   if(score>=80)return MUSIC_SECTIONS[(phraseBar%8<4)?1:2];
   if(score>=40)return MUSIC_SECTIONS[(phraseBar%8<4)?0:1];
   return MUSIC_SECTIONS[phraseBar%8<4?0:1];
@@ -117,8 +127,9 @@ function playNoiseHit(buffer,start,vol,filterType,filterFreq,dur){
 }
 
 function schedulePad(freq,start,step,section){
-  musicNote(freq,start,step*12,.028,section.pad,musicMaster);
-  musicNote(freq*1.5,start+step*2,step*8,.018,"sine",musicMaster);
+  var padVol=section.name==="suspense"?.04:.028;
+  musicNote(freq,start,step*12,padVol,section.pad,musicMaster);
+  musicNote(freq*1.5,start+step*2,step*8,section.name==="suspense"?.012:.018,"sine",musicMaster);
 }
 
 function scheduleMusic(){
@@ -144,19 +155,19 @@ function scheduleMusic(){
 
       // Kick drum (filtered noise burst)
       if(section.kick[bi]){
-        playNoiseHit(kickBuffer,t,.22,"lowpass",score>=100?220:180,.08);
+        playNoiseHit(kickBuffer,t,section.name==="suspense"?.18:.22,"lowpass",section.name==="suspense"?120:(score>=100?220:180),section.name==="suspense"?.12:.08);
       }
 
       // Hi-hat (every 8th note)
       if(section.hat[bi]){
-        playNoiseHit(hatBuffer,t,score>=100?.05:.038,"highpass",8000,.04);
+        playNoiseHit(hatBuffer,t,section.name==="suspense"?.018:(score>=100?.05:.038),section.name==="suspense"?"bandpass":"highpass",section.name==="suspense"?2400:8000,section.name==="suspense"?.08:.04);
       }
 
       // Bass and pad at the start of each bar
       if(barStep===0){
         var bassFreq=section.bass[barIndex];
-        musicNote(bassFreq,t,step*8,.13,"sawtooth",musicMaster);
-        musicNote(bassFreq*2,t+step*0.5,step*6,.045,"triangle",musicMaster);
+        musicNote(bassFreq,t,step*8,section.name==="suspense"?.16:.13,"sawtooth",musicMaster);
+        musicNote(bassFreq*2,t+step*0.5,step*6,section.name==="suspense"?.03:.045,section.name==="suspense"?"sine":"triangle",musicMaster);
         schedulePad(bassFreq*2,t,step,section);
       }
 
@@ -164,20 +175,24 @@ function scheduleMusic(){
       if(barStep%2===0){
         var arpIndex=section.arp[globalStep%section.arp.length];
         if(arpIndex>=0&&MUSIC_SCALE[arpIndex]){
-          musicNote(MUSIC_SCALE[arpIndex],t,step*1.2,score>=100?.028:.02,"sine",musicMaster);
+          musicNote(MUSIC_SCALE[arpIndex],t,section.name==="suspense"?step*.9:step*1.2,section.name==="suspense"?.012:(score>=100?.028:.02),section.name==="suspense"?"triangle":"sine",musicMaster);
         }
       }
 
       // Melody
       if(section.melody[si]>=0&&MUSIC_SCALE[section.melody[si]]){
         var mFreq=MUSIC_SCALE[section.melody[si]];
-        var mVol=barStep===0?.1:barStep%4===0?.078:.06;
-        var mDur=barStep%8===0?step*3.4:barStep%4===0?step*2.2:step*1.35;
+        var mVol=section.name==="suspense"?(barStep%8===0?.085:.055):(barStep===0?.1:barStep%4===0?.078:.06);
+        var mDur=section.name==="suspense"?(barStep%8===0?step*4.2:step*1.4):(barStep%8===0?step*3.4:barStep%4===0?step*2.2:step*1.35);
         musicNote(mFreq,t,mDur,mVol,section.lead,musicMaster);
         // harmony a 5th above on strong beats
         if(barStep%8===0&&section.melody[si]+2<MUSIC_SCALE.length){
-          musicNote(MUSIC_SCALE[section.melody[si]+2]*0.5,t,mDur*.9,mVol*.4,"sine",musicMaster);
+          musicNote(MUSIC_SCALE[section.melody[si]+2]*0.5,t,mDur*.9,section.name==="suspense"?mVol*.22:mVol*.4,"sine",musicMaster);
         }
+      }
+
+      if(section.name==="suspense"&&barStep%4===0){
+        musicNote(section.bass[barIndex]*2,t+step*.15,step*.7,.025,"square",musicMaster);
       }
     }
 
@@ -366,6 +381,8 @@ var THEMES={
     pipe:["#411126","#70204b","#250815"],
     pipeStroke:"rgba(255,180,120,.72)",
     bgColors:["rgba(255,120,90,.22)","rgba(255,200,120,.12)","rgba(255,80,140,.08)"],
+    solidBg:"#120f24",
+    backdrop:"city",
     starColor:"255,190,140",
     trail:["#ff7b54","#ffb26b","#ffd56f","#ff8fab","#ffd6a5"],
     emojis:["\uD83C\uDF05","\uD83C\uDFD6\uFE0F","\uD83E\uDEE9","\uD83E\uDD65","\uD83C\uDF79","\u2728","\uD83C\uDF3A"],
@@ -376,6 +393,8 @@ var THEMES={
     pipe:["#2a0f3f","#51206f","#180826"],
     pipeStroke:"rgba(255,224,112,.8)",
     bgColors:["rgba(255,210,80,.18)","rgba(255,90,160,.12)","rgba(120,70,255,.1)"],
+    solidBg:"#160b2a",
+    backdrop:"festival",
     starColor:"255,220,130",
     trail:["#ffd60a","#ff8fab","#8ce99a","#74c0fc","#c77dff"],
     emojis:["\uD83C\uDFA0","\uD83C\uDFA1","\uD83C\uDF6C","\uD83C\uDF89","\uD83C\uDF81","\uD83C\uDF08","\u2728"],
@@ -409,6 +428,7 @@ function applyTheme(theme){
     layers[1].color=theme.starColor;
     layers[2].color=theme.starColor;
   }
+  if(sfCanvas)sfCanvas.style.opacity=theme.solidBg?".28":"1";
 }
 
 function updateBgFloaters(theme){
@@ -426,6 +446,77 @@ function updateBgFloaters(theme){
     bg.appendChild(s);
     _bgFloaters.push(s);
   }
+}
+
+function drawCityBackdrop(theme){
+  var horizon=H*.74;
+  var glow=ctx.createLinearGradient(0,H*.2,0,horizon);
+  glow.addColorStop(0,"rgba(255,180,120,.08)");
+  glow.addColorStop(.55,theme.bgColors[0]);
+  glow.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=glow;
+  ctx.fillRect(0,0,W,horizon);
+
+  ctx.fillStyle="rgba(7,8,18,.92)";
+  var x=0;
+  while(x<W){
+    var bw=(20+Math.abs(Math.sin(x*.13))*34)*scaleF;
+    var bh=(70+Math.abs(Math.sin(x*.05))*120)*scaleF;
+    ctx.fillRect(x,horizon-bh,bw,bh);
+    if(Math.sin(x*.031)>0){
+      ctx.fillStyle="rgba(255,214,120,.18)";
+      for(var wy=horizon-bh+10*scaleF;wy<horizon-10*scaleF;wy+=12*scaleF){
+        for(var wx=x+5*scaleF;wx<x+bw-5*scaleF;wx+=9*scaleF){
+          if(((wx+wy)|0)%3===0)ctx.fillRect(wx,wy,3*scaleF,5*scaleF);
+        }
+      }
+      ctx.fillStyle="rgba(7,8,18,.92)";
+    }
+    x+=bw-1;
+  }
+}
+
+function drawFestivalBackdrop(theme){
+  var horizon=H*.76;
+  var glow=ctx.createLinearGradient(0,H*.18,0,horizon);
+  glow.addColorStop(0,"rgba(255,210,90,.08)");
+  glow.addColorStop(.5,theme.bgColors[1]);
+  glow.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=glow;
+  ctx.fillRect(0,0,W,horizon);
+
+  ctx.fillStyle="rgba(15,10,28,.95)";
+  ctx.fillRect(0,horizon,W,H-horizon);
+  for(var i=0;i<8;i++){
+    var tx=(i/7)*W;
+    var th=(26+(i%3)*16)*scaleF;
+    ctx.beginPath();
+    ctx.moveTo(tx-24*scaleF,horizon);
+    ctx.lineTo(tx,horizon-th);
+    ctx.lineTo(tx+24*scaleF,horizon);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle="rgba(255,214,90,.45)";
+  ctx.lineWidth=2*scaleF;
+  ctx.beginPath();
+  ctx.arc(W*.82,horizon-48*scaleF,38*scaleF,0,Math.PI*2);
+  ctx.stroke();
+  for(var s=0;s<6;s++){
+    ctx.beginPath();
+    ctx.moveTo(W*.82,horizon-48*scaleF);
+    ctx.lineTo(W*.82+Math.cos((Math.PI*2/6)*s)*38*scaleF,horizon-48*scaleF+Math.sin((Math.PI*2/6)*s)*38*scaleF);
+    ctx.stroke();
+  }
+}
+
+function drawThemeBackdrop(theme){
+  if(theme.solidBg){
+    ctx.fillStyle=theme.solidBg;
+    ctx.fillRect(0,0,W,H);
+  }
+  if(theme.backdrop==="city")drawCityBackdrop(theme);
+  else if(theme.backdrop==="festival")drawFestivalBackdrop(theme);
 }
 
 // ── Surprise messages ─────────────────────────────────────────
@@ -997,9 +1088,10 @@ function gameLoop(ts){
   if(!loopActive)return;
   raf=requestAnimationFrame(gameLoop);
   ctx.clearRect(0,0,W,H);
-  // Themed background gradient
+  // Themed background
   if(gameState==="playing"||gameState==="dead"){
     var th=_currentTheme;
+    if(th.solidBg)drawThemeBackdrop(th);
     var bg1=ctx.createRadialGradient(W*.2,H*.3,0,W*.2,H*.3,W*.9);
     bg1.addColorStop(0,th.bgColors[0]);bg1.addColorStop(1,"transparent");
     ctx.fillStyle=bg1;ctx.fillRect(0,0,W,H);
