@@ -1032,18 +1032,11 @@ function gameLoop(ts){
       }
       if(!ob.scored&&ob.x+ob.w<ship.x){
         ob.scored=true;obstacleScore++;
-        // Só encadeia combo se o timer ainda estiver activo; senão começa em 1
-        if(comboTimer>0){combo++;}else{combo=1;}
-        comboTimer=COMBO_TIMEOUT;
-        var comboMult=combo>=10?3:combo>=5?2:1;
-        if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
-        var pts=comboMult;
-        score+=pts;totalObstaclesEver++;
+        score+=1;totalObstaclesEver++;
         localStorage.setItem("amandaTotalObs",totalObstaclesEver);
         document.getElementById("scoreDisplay").textContent=score;
         checkScoreMilestones();
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
-        if(combo>=5)showComboPopup(combo,comboMult,false);
 
         if(obstacleScore%10===0&&obstacleScore!==lastMsgScore){
           lastMsgScore=obstacleScore;
