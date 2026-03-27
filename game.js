@@ -1037,13 +1037,14 @@ var _backdropTime=0;
 
 // ── Pipe cache ────────────────────────────────────────────────
 var pipeCache={};
-function getPipe(w,h,top,skipCache){
+function getPipe(w,h,top){
   // Quantize h to 4px steps — moving obstacles get cache hits between frames
   var hq=Math.round(h/4)*4;
   var key=(top?"t":"b")+Math.round(w)+","+hq+_obstacleTheme.name;
   if(pipeCache[key])return pipeCache[key];
   var oc=document.createElement("canvas");oc.width=Math.ceil(w);oc.height=Math.ceil(h)+20;
   var c=oc.getContext("2d");
+  var th=_obstacleTheme; // ← estava em falta após remoção da linha redundante
   var g=c.createLinearGradient(0,0,w,0);
   g.addColorStop(0,th.pipe[0]);g.addColorStop(.5,th.pipe[1]);g.addColorStop(1,th.pipe[2]);
   c.fillStyle=g;c.beginPath();
@@ -1100,10 +1101,9 @@ function getPipe(w,h,top,skipCache){
   return oc;
 }
 function drawObs(ob){
-  var skip=false; // always use cache — moving obs use quantized key
-  if(ob.topY>0)ctx.drawImage(getPipe(ob.w,ob.topY,true,skip),ob.x,0);
+  if(ob.topY>0)ctx.drawImage(getPipe(ob.w,ob.topY,true),ob.x,0);
   var bY=ob.topY+ob.gap,bH=H-bY;
-  if(bH>0)ctx.drawImage(getPipe(ob.w,bH,false,skip),ob.x,bY);
+  if(bH>0)ctx.drawImage(getPipe(ob.w,bH,false),ob.x,bY);
 }
 
 // ── Coin ──────────────────────────────────────────────────────
