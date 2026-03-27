@@ -553,14 +553,14 @@ var _lastObstacleThemeName="";
 var _bgFloaters=[]; // DOM spans for background emojis
 
 function getTheme(){
-  // Use obstacleScore for consistent thresholds (independent of combo multipliers)
-  if(obstacleScore>=210)return THEMES.aurora;
-  if(obstacleScore>=180)return THEMES.desert;
-  if(obstacleScore>=150)return THEMES.aquarium;
-  if(obstacleScore>=120)return THEMES.carnival;
-  if(obstacleScore>=90)return THEMES.sunset;
-  if(obstacleScore>=60)return THEMES.garden;
-  if(obstacleScore>=30)return THEMES.galaxy;
+  // Use score total (obstáculos + moedas + combo) para trocas de tema
+  if(score>=210)return THEMES.aurora;
+  if(score>=180)return THEMES.desert;
+  if(score>=150)return THEMES.aquarium;
+  if(score>=120)return THEMES.carnival;
+  if(score>=90)return THEMES.sunset;
+  if(score>=60)return THEMES.garden;
+  if(score>=30)return THEMES.galaxy;
   return THEMES.hearts;
 }
 
@@ -1036,74 +1036,84 @@ function drawThemeBackdropCached(theme){
 var _backdropTime=0;
 
 // ── Pipe cache ────────────────────────────────────────────────
+// ── Pipe cache — keyed by width+theme only, full H height ───────
+// The offscreen canvas is always H pixels tall.
+// drawObs clips to exact height via drawImage(src, sx,sy,sw,sh, dx,dy,dw,dh).
+// Moving obstacles reuse the same cached canvas every frame — zero rebuilds,
+// zero quantization artefacts, perfectly smooth movement.
 var pipeCache={};
-function getPipe(w,h,top){
-  // Quantize h to 4px steps — moving obstacles get cache hits between frames
-  var hq=Math.round(h/4)*4;
-  var key=(top?"t":"b")+Math.round(w)+","+hq+_obstacleTheme.name;
-  if(pipeCache[key])return pipeCache[key];
-  var oc=document.createElement("canvas");oc.width=Math.ceil(w);oc.height=Math.ceil(h)+20;
+function _buildPipeCanvas(w,top){
+  var th=_obstacleTheme;
+  var fullH=H; // full screen height — pipe shape drawn at maximum size
+  var oc=document.createElement("canvas");
+  oc.width=Math.ceil(w);oc.height=fullH+20;
   var c=oc.getContext("2d");
-  var th=_obstacleTheme; // ← estava em falta após remoção da linha redundante
   var g=c.createLinearGradient(0,0,w,0);
   g.addColorStop(0,th.pipe[0]);g.addColorStop(.5,th.pipe[1]);g.addColorStop(1,th.pipe[2]);
   c.fillStyle=g;c.beginPath();
   var bumps=5;
   if(top){
-    c.moveTo(0,0);c.lineTo(w,0);c.lineTo(w,h-14);
-    for(var i=bumps;i>=0;i--){var px=(i/bumps)*w,jag=(i%2?1:-1)*(5+Math.sin(i*2)*8);c.lineTo(px,h+jag);}
+    c.moveTo(0,0);c.lineTo(w,0);c.lineTo(w,fullH-14);
+    for(var i=bumps;i>=0;i--){var px=(i/bumps)*w,jag=(i%2?1:-1)*(5+Math.sin(i*2)*8);c.lineTo(px,fullH+jag);}
     c.closePath();
   }else{
     c.moveTo(0,0);
     for(var i=0;i<=bumps;i++){var px=(i/bumps)*w,jag=(i%2?1:-1)*(5+Math.sin(i*2)*8);c.lineTo(px,jag);}
-    c.lineTo(w,h);c.lineTo(0,h);c.closePath();
+    c.lineTo(w,fullH);c.lineTo(0,fullH);c.closePath();
   }
-  c.fill();c.strokeStyle=_obstacleTheme.pipeStroke;c.lineWidth=2;c.stroke();
-  // Decoração interior: coração nos outros temas, relva no garden
-  if(_obstacleTheme.name==="garden"){
-    // Lâminas de relva na borda exposta do pipe
+  c.fill();
+  c.strokeStyle=th.pipeStroke;c.lineWidth=2;c.stroke();
+  // Decoração interior
+  if(th.name==="garden"){
     var bladeCount=Math.floor(w/6)+2;
-    var edgeY=top?h:0; // borda exposta: fundo do pipe top, topo do pipe bottom
+    var edgeY=top?fullH:0;
     c.save();
     for(var b=0;b<bladeCount;b++){
       var bx=(b/(bladeCount-1))*w;
       var bh=(5+Math.abs(Math.sin(b*1.7))*9)*Math.min(scaleF,1);
-      var lean=(Math.sin(b*2.3))*3;
+      var lean=Math.sin(b*2.3)*3;
       var col=b%3===0?"#7ed957":b%3===1?"#51cf66":"#b7ef8a";
       c.strokeStyle=col;c.lineWidth=2.2;c.lineCap="round";
       c.globalAlpha=0.85+Math.sin(b)*0.15;
       c.beginPath();
-      if(top){
-        // relva aponta para baixo (borda de baixo do pipe top)
-        c.moveTo(bx,edgeY);
-        c.quadraticCurveTo(bx+lean,edgeY+bh*.5,bx+lean*1.4,edgeY+bh);
-      } else {
-        // relva aponta para cima (borda de cima do pipe bottom)
-        c.moveTo(bx,edgeY);
-        c.quadraticCurveTo(bx+lean,edgeY-bh*.5,bx+lean*1.4,edgeY-bh);
-      }
+      if(top){c.moveTo(bx,edgeY);c.quadraticCurveTo(bx+lean,edgeY+bh*.5,bx+lean*1.4,edgeY+bh);}
+      else    {c.moveTo(bx,edgeY);c.quadraticCurveTo(bx+lean,edgeY-bh*.5,bx+lean*1.4,edgeY-bh);}
       c.stroke();
     }
     c.restore();
   } else {
-    // Padrão: corações decorativos dentro do pipe
     c.globalAlpha=.22;c.fillStyle="#ff6fa0";
-    for(var i=0;i<Math.floor(h/50);i++){
-      var cy=top?h*.3+i*45:h*.2+i*45;
-      if(cy<0||cy>h)continue;
+    for(var i=0;i<Math.floor(fullH/50);i++){
+      var cy=top?fullH*.3+i*45:fullH*.2+i*45;
+      if(cy<0||cy>fullH)continue;
       c.beginPath();var cx=w/2,cs=10;
       c.moveTo(cx,cy+cs*.7);c.bezierCurveTo(cx-cs*.8,cy+cs*.2,cx-cs*.8,cy-cs*.5,cx,cy-cs*.1);
       c.bezierCurveTo(cx+cs*.8,cy-cs*.5,cx+cs*.8,cy+cs*.2,cx,cy+cs*.7);c.fill();
     }
   }
   c.globalAlpha=1;
-  pipeCache[key]=oc;
   return oc;
 }
+function getPipeCanvas(w,top){
+  var key=(top?"t":"b")+Math.round(w)+_obstacleTheme.name;
+  if(!pipeCache[key])pipeCache[key]=_buildPipeCanvas(w,top);
+  return pipeCache[key];
+}
 function drawObs(ob){
-  if(ob.topY>0)ctx.drawImage(getPipe(ob.w,ob.topY,true),ob.x,0);
-  var bY=ob.topY+ob.gap,bH=H-bY;
-  if(bH>0)ctx.drawImage(getPipe(ob.w,bH,false),ob.x,bY);
+  var pc,bY,bH;
+  // Top pipe: draw from y=0, clip to ob.topY pixels tall
+  if(ob.topY>0){
+    pc=getPipeCanvas(ob.w,true);
+    // source: bottom ob.topY px of the canvas (the edge with the jagged tip)
+    ctx.drawImage(pc, 0,H-ob.topY, ob.w,ob.topY, ob.x,0, ob.w,ob.topY);
+  }
+  // Bottom pipe: draw from ob.topY+ob.gap, clip to remaining height
+  bY=ob.topY+ob.gap; bH=H-bY;
+  if(bH>0){
+    pc=getPipeCanvas(ob.w,false);
+    // source: top bH px of the canvas
+    ctx.drawImage(pc, 0,0, ob.w,bH, ob.x,bY, ob.w,bH);
+  }
 }
 
 // ── Coin ──────────────────────────────────────────────────────
