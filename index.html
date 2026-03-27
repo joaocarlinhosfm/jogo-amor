@@ -35,6 +35,7 @@
   <div class="hero-divider"><span></span><i></i><span></span></div>
   <button class="cta-btn" id="startBtn">💖 COMEÇAR AVENTURA</button>
   <button class="btn-secondary" id="rankLandBtn">🏆 Ranking</button>
+  <button class="btn-secondary battle-land-btn" id="multiplayerBtn">⚔️ Batalha</button>
   <button class="btn-secondary" id="profileLandBtn">👤 Perfil</button>
   <p class="hint">toque para voar pelo universo</p>
 </div>
@@ -212,6 +213,64 @@
     <button class="cta-btn" id="tutOkBtn" style="margin-top:.5rem">Vamos lá! 💕</button>
   </div>
 </div>
+
+
+<!-- ── Battle Lobby ────────────────────────────────── -->
+<div class="screen hidden" id="battleLobby">
+  <div class="battle-lobby-card">
+    <div class="bl-title">⚔️ Batalha</div>
+    <p class="bl-sub">Joga contra um amigo em tempo real</p>
+
+    <button class="cta-btn" id="brCreateBtn" style="width:100%;margin-bottom:.6rem">🎮 Criar Sala</button>
+
+    <!-- Código gerado (host vê após criar) -->
+    <div id="brCodeWrap" class="br-code-wrap" style="display:none">
+      <p class="br-code-label">Dá este código ao teu adversário:</p>
+      <div class="br-code-display" id="brCodeDisplay">----</div>
+    </div>
+
+    <!-- Secção de entrar -->
+    <div id="brJoinSection" class="br-join-section">
+      <div class="br-divider"><span></span><i>ou</i><span></span></div>
+      <div class="br-input-row">
+        <input class="br-code-input" id="brCodeInput" type="text"
+               maxlength="4" placeholder="CÓDIGO" autocomplete="off"
+               style="text-transform:uppercase"/>
+        <button class="cta-btn br-join-btn" id="brJoinBtn">Entrar</button>
+      </div>
+    </div>
+
+    <p class="br-status" id="brStatus">Cria uma sala ou entra num código 💕</p>
+    <button class="btn-secondary" id="brLobbyBack" style="margin-top:.4rem">← Voltar</button>
+  </div>
+</div>
+
+<!-- ── Battle Result Overlay ─────────────────────────── -->
+<div id="battleResult">
+  <div class="br-result-card">
+    <div class="br-emoji" id="brEmoji">🏆</div>
+    <div class="br-result-title" id="brTitle">Ganhaste!</div>
+    <div class="br-result-sub" id="brSub">Mandas no céu 🚀</div>
+    <div class="br-scores">
+      <div class="br-score-item br-score-mine">
+        <span class="br-score-label">Tu</span>
+        <span class="br-score-val" id="brMyScore">0</span>
+      </div>
+      <div class="br-score-vs">VS</div>
+      <div class="br-score-item br-score-opp">
+        <span class="br-score-label" id="brOppName">Adversário</span>
+        <span class="br-score-val" id="brOppScore">0</span>
+      </div>
+    </div>
+    <div class="br-btn-row">
+      <button class="cta-btn" id="brPlayAgain">⚔️ Revanche</button>
+      <button class="btn-secondary" id="brMenuBtn">Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Battle Toast ───────────────────────────────────── -->
+<div id="battleToast" class="battle-toast"></div>
 
 </body>
 </html>

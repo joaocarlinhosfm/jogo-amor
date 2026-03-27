@@ -1,3 +1,18 @@
+// ── Mulberry32 PRNG (deterministic, seeded) ──────────────────
+// Used in battle mode so both clients generate identical obstacles
+var _prng=null;
+function mulberry32(seed){
+  return function(){
+    seed|=0;seed=seed+0x6D2B79F5|0;
+    var t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function prngRand(){return _prng?_prng():Math.random();}
+function setBattleSeed(seed){_prng=mulberry32(seed);}
+function clearBattleSeed(){_prng=null;}
+
 // ── Ship photos (random per game) ────────────────────────────
 var SHIP_PHOTOS=["amanda.jpg","photo3.jpg","photo4.jpg","photo5.jpg"];
 var amandaImg=new Image();
@@ -306,6 +321,92 @@ var cloverActive=false,cloverTimer=0,CLOVER_DURATION=600;         // 10s @ 60fps
 var cloverFlashAlpha=0;
 var announce100={alpha:0,active:false};
 var powerUps=[]; // {x,y,type,r,pulse}
+
+// ── Battle mode globals ───────────────────────────────────────
+var battleMode=false;           // true when in a multiplayer match
+var battleRole="";              // "A" or "B"
+var battleRoomId="";
+var battleOpponentY=0;          // latest Y from Firebase listener
+var battleOpponentDead=false;
+var battleOpponentScore=0;
+var battleOpponentPhoto="";     // base64 or URL
+var _opponentCache=null;        // offscreen canvas for ghost avatar
+var _opponentCacheSize=0;
+var battleCountdown=0;          // 3,2,1 countdown frames
+var _battleStartTs=0;           // server timestamp to align start
+var _publishInterval=null;      // setInterval handle
+var _battleResultShown=false;
+
+function buildOpponentCache(size){
+  var oc=document.createElement("canvas");oc.width=oc.height=size;
+  var c=oc.getContext("2d"),r=size/2;
+  c.beginPath();c.arc(r,r,r,0,Math.PI*2);
+  c.fillStyle="rgba(230,225,255,0.14)";c.fill();
+  c.beginPath();c.arc(r,r*0.70,r*0.30,0,Math.PI*2);
+  c.fillStyle="rgba(210,205,255,0.60)";c.fill();
+  c.beginPath();c.arc(r,r*1.52,r*0.50,Math.PI,0);
+  c.fillStyle="rgba(210,205,255,0.60)";c.fill();
+  c.beginPath();c.arc(r,r,r-1.5,0,Math.PI*2);
+  c.strokeStyle="rgba(190,180,255,0.45)";c.lineWidth=2.5;c.stroke();
+  _opponentCache=oc;_opponentCacheSize=size;
+}
+function drawGhostOpponent(){
+  if(!battleMode)return;
+  var sz=ship.w;
+  if(!_opponentCache||_opponentCacheSize!==sz)buildOpponentCache(sz);
+  if(!_opponentCache)return;
+  var ghostY=Math.max(0,Math.min(H-sz,battleOpponentY));
+  ctx.save();
+  if(battleOpponentDead){
+    ctx.globalAlpha=0.18;
+    ctx.translate(ship.x+sz*0.4,ghostY+sz/2);
+    ctx.rotate(1.1);
+    ctx.drawImage(_opponentCache,-sz/2,-sz/2,sz,sz);
+  } else {
+    ctx.globalAlpha=0.40+0.08*Math.sin(Date.now()*.004);
+    ctx.drawImage(_opponentCache,ship.x-sz*0.1,ghostY,sz,sz);
+    ctx.globalAlpha=0.60;
+    ctx.font="bold "+(9*scaleF)+"px 'Quicksand',sans-serif";
+    ctx.textAlign="center";ctx.fillStyle="#c8c8ff";
+    ctx.fillText("👻",ship.x+sz*.4,ghostY-4*scaleF);
+  }
+  ctx.restore();
+}
+
+function startBattlePublish(){
+  if(_publishInterval)clearInterval(_publishInterval);
+  _publishInterval=setInterval(function(){
+    if(!battleMode||!battleRoomId)return;
+    if(typeof publishBattleState==="function")publishBattleState();
+  },50);
+}
+function stopBattlePublish(){
+  if(_publishInterval){clearInterval(_publishInterval);_publishInterval=null;}
+}
+
+function drawBattleCountdown(){
+  if(battleCountdown<=0)return;
+  var n=Math.ceil(battleCountdown/60);
+  ctx.save();
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  var sc=1+(1-battleCountdown%60/60)*0.4;
+  ctx.translate(W/2,H/2);ctx.scale(sc,sc);
+  ctx.font="bold "+(72*scaleF)+"px 'Pacifico',cursive";
+  ctx.fillStyle="rgba(255,45,120,0.18)";ctx.fillText(n,3,3);
+  ctx.fillStyle="#fff";ctx.fillText(n,0,0);
+  ctx.restore();
+}
+
+function drawBattleHud(){
+  if(!battleMode)return;
+  // Show opponent score top-right small
+  ctx.save();
+  ctx.font="bold "+(11*scaleF)+"px 'Quicksand',sans-serif";
+  ctx.textAlign="right";ctx.fillStyle="rgba(200,200,255,0.7)";
+  ctx.fillText("👻 "+battleOpponentScore,W-10*scaleF,28*scaleF);
+  ctx.restore();
+}
+
 
 function getScoreBoostMult(){return cloverActive?3:1;}
 function getObstacleScoreValue(){return score<100?EARLY_OBSTACLE_SCORE:SCORE_PER_OBSTACLE;}
@@ -782,6 +883,9 @@ function initGame(){
   cloverActive=false;cloverTimer=0;
   cloverFlashAlpha=0;
   announce100.active=false;announce100.alpha=0;powerUps=[];_lastMilestone=0;
+  battleCountdown=0;_battleResultShown=false;
+  battleOpponentY=H/2;battleOpponentDead=false;battleOpponentScore=0;
+  _opponentCache=null;
   msgPopup.active=false;
   gameReady=false;tilt=0;lastTime=0;lastMsgScore=0;
   // Increment totalGames here (correct place — game is starting)
@@ -1335,6 +1439,15 @@ function gameLoop(ts){
     if(!gameReady){
       ship.y=H/2+Math.sin(ts*.003)*12*scaleF;
       drawAmanda(ship.x,ship.y,ship.w,ship.h,0,false);
+      // Battle countdown overlay
+      if(battleMode&&battleCountdown>0){
+        battleCountdown--;
+        drawBattleCountdown();
+        if(battleCountdown<=0){
+          gameReady=true;lastTime=0;startMusic();
+          startBattlePublish();
+        }
+      }
       drawPart();return;
     }
 
@@ -1389,14 +1502,14 @@ function gameLoop(ts){
       obstTimer=0;
       var post100Ease=score>=100?.95:1;
       var gRamp=Math.max(0,score-40);
-      var gap=Math.max(H*.22,H*(.30+Math.random()*.1)-gRamp*H*.0007*post100Ease);
+      var gap=Math.max(H*.22,H*(.30+prngRand()*.1)-gRamp*H*.0007*post100Ease);
       if(score>=100)gap=Math.min(H*.42,gap*1.05);
-      var topY=H*.1+Math.random()*(H-gap-H*.2);
+      var topY=H*.1+prngRand()*(H-gap-H*.2);
       var movProb=score>=40?Math.min(.60,.40+(score-40)*.001667):0;
       if(score>=100)movProb*=.95;
-      var moving=Math.random()<movProb;
+      var moving=prngRand()<movProb;
       obstacles.push({x:W+10,w:65*scaleF,topY:topY,gap:gap,scored:false,coinSpawned:false,
-        moving:moving,vy:moving?((.4+Math.random()*.5)*scaleF*(score>=100?.95:1)*(Math.random()<.5?1:-1)):0,
+        moving:moving,vy:moving?((.4+prngRand()*.5)*scaleF*(score>=100?.95:1)*(prngRand()<.5?1:-1)):0,
         minY:H*.06,maxY:H-gap-H*.06});
     }
 
@@ -1414,15 +1527,13 @@ function gameLoop(ts){
       if(!ob.coinSpawned&&ob.x<W*.75){
         ob.coinSpawned=true;
         var coinProb=(obstacleScore+1)<30?.31:Math.min(.51,.31+((obstacleScore+1)-30)*.003333);
-        if(Math.random()<coinProb){
+        if(prngRand()<coinProb){
           // coin rain: 3 coins at once after score 100
-          if(score>=100&&Math.random()<.15){spawnCoinRain(ob);}
+          if(score>=100&&prngRand()<.15){spawnCoinRain(ob);}
           else{spawnCoin(ob);}
         }
-        // power-up spawn after score 100
-        // power-up spawn — thresholds escalonados por dificuldade
         if(score>=60){
-          var pu=Math.random();
+          var pu=prngRand();
           if(score>=100){
             if(pu<.03)      spawnPowerUp(ob,"star");      // 3% ⭐ raro
             else if(pu<.09) spawnPowerUp(ob,"shield");    // 6%
@@ -1478,19 +1589,32 @@ function gameLoop(ts){
       ship.shieldFlash=30; // longer flash to signal invincibility
     }
     if(hit){
-      loopActive=false;
-      sndHit();stopMusic();spawnH(ship.x+ship.w/2,ship.y+ship.h/2,14);
-      combo=0;comboTimer=0; // reset combo on death
+      sndHit();spawnH(ship.x+ship.w/2,ship.y+ship.h/2,14);
+      combo=0;comboTimer=0;
       var gw=document.getElementById("game-wrap");
       gw.classList.add("shake");
       setTimeout(function(){gw.classList.remove("shake");},400);
       gameState="dead";ship.dead=true;
       if(score>best){best=score;localStorage.setItem("amandaBest",best);}
-      ctx.clearRect(0,0,W,H);drawStars(false);
-      for(var i=0;i<obstacles.length;i++)drawObs(obstacles[i]);
-      drawAmanda(ship.x,ship.y+5,ship.w,ship.h,1.1,true);
-      drawPart();
-      setTimeout(showGameOver,800);return;
+      if(battleMode){
+        // In battle: publish death, keep loop alive to watch opponent, wait for result
+        if(typeof publishBattleState==="function")publishBattleState(true);
+        stopBattlePublish();
+        ctx.clearRect(0,0,W,H);drawStars(false);
+        for(var ii=0;ii<obstacles.length;ii++)drawObs(obstacles[ii]);
+        drawAmanda(ship.x,ship.y+5,ship.w,ship.h,1.1,true);
+        drawPart();
+        // Result shown by Firebase listener once opponent also dies or concedes
+        return;
+      } else {
+        loopActive=false;
+        stopMusic();
+        ctx.clearRect(0,0,W,H);drawStars(false);
+        for(var ii=0;ii<obstacles.length;ii++)drawObs(obstacles[ii]);
+        drawAmanda(ship.x,ship.y+5,ship.w,ship.h,1.1,true);
+        drawPart();
+        setTimeout(showGameOver,800);return;
+      }
     }
 
     // Ghost: nave semi-transparente com shimmer violeta
@@ -1517,10 +1641,13 @@ function gameLoop(ts){
     if(cloverActive){drawCloverAura();}
     drawComboPopup();
     drawMsg();
+    drawGhostOpponent();
+    drawBattleHud();
 
   }else if(gameState==="dead"){
     for(var i=0;i<obstacles.length;i++)drawObs(obstacles[i]);
     drawAmanda(ship.x,ship.y+5,ship.w,ship.h,1.1,true);
+    drawGhostOpponent();
   }
   drawPart();
 }
@@ -1536,6 +1663,9 @@ function menuLoop(ts){
 function stopLoop(){loopActive=false;if(raf)cancelAnimationFrame(raf);raf=null;}
 function showMenu(){
   stopLoop();
+  stopBattlePublish();
+  battleMode=false;battleRole="";battleRoomId="";clearBattleSeed();
+  if(typeof leaveBattleRoom==="function")leaveBattleRoom();
   if(ctx)ctx.clearRect(0,0,W,H);
   stopMusic();
   var cb=document.getElementById("comboBar");if(cb)cb.classList.remove("active");
@@ -1553,24 +1683,42 @@ function showMenu(){
   document.getElementById("hud").classList.remove("visible");
   gameState="menu";loopActive=true;requestAnimationFrame(menuLoop);
 }
-function startGame(){
+function startGame(opts){
+  // opts: optional {battle:true, role:"A"|"B", roomId:"ABCD", seed:1234567}
   var loggedIn=(typeof currentPlayer!=="undefined"&&currentPlayer!==null)
                ||!!localStorage.getItem("amandaPlayerKey");
   if(!loggedIn){
-    if(typeof showNamePrompt==="function"){showNamePrompt(startGame);}
+    if(typeof showNamePrompt==="function"){showNamePrompt(function(){startGame(opts);});}
     return;
   }
   stopLoop();
+  // Apply battle config before initGame
+  if(opts&&opts.battle){
+    battleMode=true;
+    battleRole=opts.role||"A";
+    battleRoomId=opts.roomId||"";
+    if(opts.seed)setBattleSeed(opts.seed);
+    battleCountdown=180; // 3 seconds @ 60fps
+  } else {
+    battleMode=false;
+    battleRole="";
+    battleRoomId="";
+    clearBattleSeed();
+  }
   var gw=document.getElementById("game-wrap");if(gw)gw.style.visibility="visible";
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("gameover").classList.add("hidden");
+  var lobby=document.getElementById("battleLobby");if(lobby)lobby.classList.add("hidden");
   document.getElementById("hud").classList.add("visible");
   initGame();gameState="playing";loopActive=true;requestAnimationFrame(gameLoop);
-  // First time tutorial
-  if(totalGames===1&&!localStorage.getItem("amandaTutorialSeen")){
-    setTimeout(function(){
-      if(typeof showTutorial==="function")showTutorial();
-    },500);
+  // In battle mode the countdown fires in the loop; music starts after countdown
+  if(!battleMode){
+    // First time tutorial
+    if(totalGames===1&&!localStorage.getItem("amandaTutorialSeen")){
+      setTimeout(function(){
+        if(typeof showTutorial==="function")showTutorial();
+      },500);
+    }
   }
 }
 function showGameOver(){
@@ -1591,7 +1739,10 @@ function flap(){
   var now=performance.now();
   if(now-_lastFlap<50)return;
   _lastFlap=now;
-  if(!gameReady){gameReady=true;lastTime=0;startMusic();}
+  if(!gameReady){
+    if(battleMode)return; // countdown controls gameReady in battle
+    gameReady=true;lastTime=0;startMusic();
+  }
   ship.vy=ship.vy*.15+flapPower*.85;
   sndFlap();spawnH(ship.x+ship.w*.05,ship.y+ship.h*.6,5);
 }

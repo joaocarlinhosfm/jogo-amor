@@ -430,3 +430,295 @@ function showTutorial(){
   hideAllScreens();
   document.getElementById("tutorial").classList.remove("hidden");
 }
+
+// ══════════════════════════════════════════════════════════════
+// ── BATTLE MODE ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+var roomsRef=db.ref("rooms");
+var _battleRoomRef=null;
+var _battleListener=null;
+
+// ── Gera código de 4 letras ───────────────────────────────────
+function genRoomCode(){
+  var chars="ABCDEFGHJKLMNPQRSTUVWXYZ"; // sem I,O para evitar confusão
+  var code="";
+  for(var i=0;i<4;i++)code+=chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+// ── Criar sala (host = Jogador A) ─────────────────────────────
+function createBattleRoom(onWaiting, onStart, onResult, onError){
+  if(!currentPlayer){onError("Precisas de fazer login primeiro.");return;}
+  var code=genRoomCode();
+  var seed=Math.floor(Math.random()*2147483647);
+  var roomData={
+    code:code,
+    hostKey:getPlayerKey(),
+    hostName:getPlayerName(),
+    guestKey:"",
+    guestName:"",
+    status:"waiting",
+    seed:seed,
+    startTs:0,
+    createdAt:firebase.database.ServerValue.TIMESTAMP,
+    playerA:{y:0,score:0,dead:false},
+    playerB:{y:0,score:0,dead:false},
+    winner:""
+  };
+  _battleRoomRef=roomsRef.child(code);
+  _battleRoomRef.set(roomData).then(function(){
+    // Cleanup on disconnect
+    _battleRoomRef.child("status").onDisconnect().set("abandoned");
+    onWaiting(code);
+    _listenRoom("A", onStart, onResult);
+  }).catch(function(e){onError("Erro ao criar sala: "+e.message);});
+}
+
+// ── Entrar numa sala (guest = Jogador B) ──────────────────────
+function joinBattleRoom(code, onStart, onResult, onError){
+  if(!currentPlayer){onError("Precisas de fazer login primeiro.");return;}
+  code=code.toUpperCase().trim();
+  if(code.length!==4){onError("Código deve ter 4 letras.");return;}
+  _battleRoomRef=roomsRef.child(code);
+  _battleRoomRef.once("value").then(function(snap){
+    if(!snap.exists()){onError("Sala não encontrada.");return;}
+    var d=snap.val();
+    if(d.status==="abandoned"){onError("Esta sala foi abandonada.");return;}
+    if(d.status!=="waiting"){onError("Esta sala já está em jogo.");return;}
+    if(d.hostKey===getPlayerKey()){onError("Não podes entrar na tua própria sala.");return;}
+    // Join
+    return _battleRoomRef.update({
+      guestKey:getPlayerKey(),
+      guestName:getPlayerName(),
+      status:"ready",
+      startTs:firebase.database.ServerValue.TIMESTAMP
+    }).then(function(){
+      _battleRoomRef.child("status").onDisconnect().set("abandoned");
+      _listenRoom("B", onStart, onResult);
+    });
+  }).catch(function(e){onError("Erro ao entrar: "+e.message);});
+}
+
+// ── Listener central da sala ──────────────────────────────────
+function _listenRoom(role, onStart, onResult){
+  if(_battleListener){_battleRoomRef.off("value",_battleListener);}
+  _battleListener=_battleRoomRef.on("value",function(snap){
+    if(!snap.exists())return;
+    var d=snap.val();
+
+    // Status abandoned → voltar ao menu
+    if(d.status==="abandoned"){
+      leaveBattleRoom();
+      if(typeof showMenu==="function")showMenu();
+      showBattleToast("O adversário saiu da sala 💔");
+      return;
+    }
+
+    // Quando guest entra → host recebe "ready" → ambos arrancam
+    if(d.status==="ready"&&!battleMode){
+      onStart({role:role, roomId:d.code||snap.key, seed:d.seed});
+      return;
+    }
+
+    // Durante o jogo: actualizar estado do adversário
+    if(battleMode){
+      var opp=(role==="A")?d.playerB:d.playerA;
+      if(opp){
+        battleOpponentY=opp.y||0;
+        battleOpponentScore=opp.score||0;
+        battleOpponentDead=!!(opp.dead);
+      }
+
+      // Resultado: ambos mortos ou winner definido
+      if(d.winner&&!_battleResultShown){
+        _battleResultShown=true;
+        var iWon=(d.winner===role);
+        stopBattlePublish();
+        stopMusic();
+        setTimeout(function(){showBattleResult(iWon,d);},600);
+      }
+      // Verificar se ambos morreram e ainda não há winner
+      if(!d.winner&&d.playerA&&d.playerB&&d.playerA.dead&&d.playerB.dead){
+        // Quem tiver maior score ganha
+        var winner=(d.playerA.score>=d.playerB.score)?"A":"B";
+        _battleRoomRef.update({winner:winner}).catch(function(){});
+      }
+    }
+  });
+}
+
+// ── Publicar estado local para o Firebase ─────────────────────
+function publishBattleState(isDead){
+  if(!_battleRoomRef||!battleRole)return;
+  var myKey="player"+battleRole; // "playerA" ou "playerB"
+  var update={};
+  update[myKey+"/y"]=ship?Math.round(ship.y):0;
+  update[myKey+"/score"]=score||0;
+  update[myKey+"/dead"]=!!(isDead||gameState==="dead");
+  _battleRoomRef.update(update).catch(function(){});
+}
+
+// ── Sair/limpar sala ──────────────────────────────────────────
+function leaveBattleRoom(){
+  if(_battleListener&&_battleRoomRef){
+    _battleRoomRef.off("value",_battleListener);
+    _battleListener=null;
+  }
+  // Marcar como abandoned se ainda em waiting
+  if(_battleRoomRef){
+    _battleRoomRef.once("value").then(function(s){
+      if(s.exists()&&(s.val().status==="waiting"||s.val().status==="ready")){
+        _battleRoomRef.update({status:"abandoned"}).catch(function(){});
+      }
+    }).catch(function(){});
+    _battleRoomRef=null;
+  }
+}
+
+// ── Overlay de resultado da batalha ──────────────────────────
+function showBattleResult(iWon, roomData){
+  loopActive=false;
+  var overlay=document.getElementById("battleResult");
+  if(!overlay)return;
+  var myScore=(battleRole==="A")?(roomData.playerA&&roomData.playerA.score||0):(roomData.playerB&&roomData.playerB.score||0);
+  var oppScore=(battleRole==="A")?(roomData.playerB&&roomData.playerB.score||0):(roomData.playerA&&roomData.playerA.score||0);
+  var oppName=(battleRole==="A")?(roomData.guestName||"Adversário"):(roomData.hostName||"Adversário");
+  document.getElementById("brEmoji").textContent=iWon?"🏆":"💔";
+  document.getElementById("brTitle").textContent=iWon?"Ganhaste!":"Perdeste...";
+  document.getElementById("brSub").textContent=iWon?"Mandas no céu 🚀":"Boa tentativa 💕";
+  document.getElementById("brMyScore").textContent=myScore;
+  document.getElementById("brOppName").textContent=oppName;
+  document.getElementById("brOppScore").textContent=oppScore;
+  overlay.classList.add("show");
+  // Submit score normal
+  if(typeof submitScore==="function")submitScore(myScore);
+}
+
+// ── Toast simples ─────────────────────────────────────────────
+function showBattleToast(msg){
+  var t=document.getElementById("battleToast");
+  if(!t){
+    t=document.createElement("div");t.id="battleToast";
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.className="battle-toast show";
+  setTimeout(function(){t.classList.remove("show");},3000);
+}
+
+// ── Wiring dos botões de batalha ──────────────────────────────
+window.addEventListener("load",function(){
+  // Botão multiplayer no landing
+  var mpBtn=document.getElementById("multiplayerBtn");
+  if(mpBtn)mpBtn.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    var loggedIn=(typeof currentPlayer!=="undefined"&&currentPlayer!==null)
+                 ||!!localStorage.getItem("amandaPlayerKey");
+    if(!loggedIn){
+      if(typeof showNamePrompt==="function")showNamePrompt(function(){showBattleLobby();});
+      return;
+    }
+    showBattleLobby();
+  });
+
+  // Botão criar sala
+  var createBtn=document.getElementById("brCreateBtn");
+  if(createBtn)createBtn.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    setLobbyStatus("A criar sala...");
+    createBattleRoom(
+      function(code){
+        // Mostrar código e aguardar
+        document.getElementById("brCodeDisplay").textContent=code;
+        document.getElementById("brCodeWrap").style.display="flex";
+        document.getElementById("brJoinSection").style.display="none";
+        document.getElementById("brCreateBtn").style.display="none";
+        setLobbyStatus("Aguarda que o teu adversário entre com o código 💕");
+      },
+      function(opts){
+        // Adversário entrou → arrancar
+        startGame({battle:true, role:opts.role, roomId:opts.roomId, seed:opts.seed});
+      },
+      function(iWon,d){showBattleResult(iWon,d);},
+      function(err){setLobbyStatus("❌ "+err);}
+    );
+  });
+
+  // Botão entrar com código
+  var joinBtn=document.getElementById("brJoinBtn");
+  if(joinBtn)joinBtn.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    var code=(document.getElementById("brCodeInput").value||"").trim().toUpperCase();
+    if(code.length!==4){setLobbyStatus("Introduz um código de 4 letras.");return;}
+    setLobbyStatus("A entrar...");
+    joinBattleRoom(code,
+      function(opts){
+        startGame({battle:true, role:opts.role, roomId:opts.roomId, seed:opts.seed});
+      },
+      function(iWon,d){showBattleResult(iWon,d);},
+      function(err){setLobbyStatus("❌ "+err);}
+    );
+  });
+
+  // Botão voltar do lobby
+  var lobbyBack=document.getElementById("brLobbyBack");
+  if(lobbyBack)lobbyBack.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    leaveBattleRoom();
+    hideBattleLobby();
+  });
+
+  // Botão jogar de novo no resultado
+  var brPlay=document.getElementById("brPlayAgain");
+  if(brPlay)brPlay.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    document.getElementById("battleResult").classList.remove("show");
+    battleMode=false;battleRole="";battleRoomId="";
+    leaveBattleRoom();
+    showBattleLobby();
+  });
+
+  // Botão menu no resultado
+  var brMenu=document.getElementById("brMenuBtn");
+  if(brMenu)brMenu.addEventListener("pointerdown",function(e){
+    e.stopPropagation();
+    document.getElementById("battleResult").classList.remove("show");
+    battleMode=false;battleRole="";battleRoomId="";
+    leaveBattleRoom();
+    showMenu();
+  });
+});
+
+// ── Helpers de UI do lobby ────────────────────────────────────
+function showBattleLobby(){
+  hideAllScreens();
+  var lobby=document.getElementById("battleLobby");
+  if(!lobby)return;
+  lobby.classList.remove("hidden");
+  // Reset estado visual
+  document.getElementById("brCodeDisplay").textContent="----";
+  document.getElementById("brCodeWrap").style.display="none";
+  document.getElementById("brJoinSection").style.display="flex";
+  document.getElementById("brCreateBtn").style.display="";
+  document.getElementById("brCodeInput").value="";
+  setLobbyStatus("Cria uma sala ou entra num código 💕");
+}
+function hideBattleLobby(){
+  var lobby=document.getElementById("battleLobby");
+  if(lobby)lobby.classList.add("hidden");
+  document.getElementById("landing").classList.remove("hidden");
+}
+function setLobbyStatus(msg){
+  var el=document.getElementById("brStatus");
+  if(el)el.textContent=msg;
+}
+
+// ── Limpeza de salas antigas (>30min) ─────────────────────────
+// Corre uma vez ao carregar — apaga salas expiradas silenciosamente
+window.addEventListener("load",function(){
+  var cutoff=Date.now()-30*60*1000;
+  roomsRef.orderByChild("createdAt").endAt(cutoff).once("value").then(function(snap){
+    var updates={};
+    snap.forEach(function(c){updates[c.key]=null;});
+    if(Object.keys(updates).length)roomsRef.update(updates).catch(function(){});
+  }).catch(function(){});
+});

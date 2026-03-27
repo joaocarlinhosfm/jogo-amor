@@ -327,3 +327,155 @@ html,body{width:100%;height:100%;background:var(--deep);overflow:hidden;font-fam
 .pow-badge.active { opacity:1; }
 .pow-badge span { font-size:14px; }
 .pow-badge .pow-name { font-size:.6rem; font-weight:700; letter-spacing:.1em; color:#fff; text-transform:uppercase; }
+
+/* ══════════════════════════════════════════════════════════════
+   ── BATTLE MODE STYLES ────────────────────────────────────────
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Multiplayer button on landing — accent colour ── */
+.battle-land-btn{
+  border-color:rgba(120,100,255,.45)!important;
+  color:rgba(180,160,255,.85)!important;
+}
+.battle-land-btn:hover{
+  border-color:rgba(160,140,255,.85)!important;
+  color:#fff!important;
+  box-shadow:0 0 20px rgba(120,100,255,.35)!important;
+}
+
+/* ── Battle Lobby ── */
+#battleLobby{
+  background:radial-gradient(ellipse 80% 60% at 50% 30%,
+    rgba(40,20,100,.95) 0%,rgba(5,0,13,.98) 70%);
+}
+.battle-lobby-card{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(120,100,255,.28);
+  border-radius:20px;
+  padding:1.6rem 1.4rem;
+  max-width:310px;width:90%;
+  display:flex;flex-direction:column;align-items:center;gap:.75rem;
+}
+.bl-title{
+  font-family:'Pacifico',cursive;
+  font-size:1.8rem;
+  background:linear-gradient(135deg,#fff,rgba(180,160,255,1));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  filter:drop-shadow(0 0 14px rgba(120,100,255,.5));
+}
+.bl-sub{
+  font-size:.65rem;font-weight:600;letter-spacing:.14em;
+  color:rgba(180,160,255,.6);text-transform:uppercase;margin:0;
+}
+
+/* Code display (host) */
+.br-code-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:.4rem;
+  width:100%;
+}
+.br-code-label{
+  font-size:.62rem;font-weight:600;letter-spacing:.12em;
+  color:rgba(180,160,255,.55);text-transform:uppercase;margin:0;
+}
+.br-code-display{
+  font-family:'Pacifico',cursive;font-size:2.6rem;letter-spacing:.18em;
+  color:#fff;
+  text-shadow:0 0 24px rgba(120,100,255,.7),0 0 60px rgba(120,100,255,.3);
+  user-select:all;cursor:copy;
+}
+
+/* Join section */
+.br-join-section{display:flex;flex-direction:column;align-items:center;gap:.6rem;width:100%;}
+.br-divider{
+  display:flex;align-items:center;gap:8px;width:80%;
+}
+.br-divider span{flex:1;height:1px;background:rgba(120,100,255,.25);}
+.br-divider i{font-size:.65rem;font-style:normal;color:rgba(180,160,255,.45);letter-spacing:.1em;}
+.br-input-row{display:flex;gap:.5rem;width:100%;}
+.br-code-input{
+  flex:1;background:rgba(255,255,255,.06);
+  border:1px solid rgba(120,100,255,.35);
+  border-radius:99px;color:#fff;
+  font-family:'Pacifico',cursive;font-size:1.1rem;letter-spacing:.18em;
+  padding:.6em 1em;text-align:center;outline:none;
+  transition:border-color .2s;
+}
+.br-code-input:focus{border-color:rgba(160,140,255,.8);}
+.br-code-input::placeholder{color:rgba(180,160,255,.2);font-size:.7rem;font-family:'Quicksand',sans-serif;letter-spacing:.15em;}
+.br-join-btn{padding:.65em 1.2em!important;margin:0!important;flex-shrink:0;font-size:.75rem!important;}
+
+/* Status */
+.br-status{
+  font-size:.65rem;font-weight:600;letter-spacing:.1em;
+  color:rgba(180,160,255,.7);text-align:center;
+  min-height:1.4em;margin:0;
+}
+
+/* ── Battle Result Overlay ── */
+#battleResult{
+  display:none;
+  position:fixed;inset:0;z-index:60;
+  background:radial-gradient(ellipse 100% 80% at 50% 40%,
+    rgba(30,10,80,.97) 0%,rgba(5,0,13,.99) 100%);
+  flex-direction:column;align-items:center;justify-content:center;
+  animation:brFadeIn .5s ease forwards;
+}
+#battleResult.show{display:flex;}
+@keyframes brFadeIn{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:scale(1);}}
+
+.br-result-card{
+  display:flex;flex-direction:column;align-items:center;gap:.7rem;
+  max-width:320px;width:90%;
+}
+.br-emoji{
+  font-size:3.8rem;
+  animation:brBounce .7s ease infinite alternate;
+}
+@keyframes brBounce{from{transform:translateY(0) scale(1);}to{transform:translateY(-10px) scale(1.07);}}
+
+.br-result-title{
+  font-family:'Pacifico',cursive;
+  font-size:clamp(2rem,9vw,3rem);
+  background:linear-gradient(135deg,#ffd60a,#ff2d78);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  filter:drop-shadow(0 0 16px rgba(255,45,120,.5));
+}
+.br-result-sub{
+  font-size:.65rem;font-weight:700;letter-spacing:.25em;
+  color:rgba(255,179,204,.6);text-transform:uppercase;
+}
+
+/* Scores */
+.br-scores{
+  display:flex;align-items:center;gap:1.2rem;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(120,100,255,.2);
+  border-radius:16px;
+  padding:1rem 1.4rem;width:100%;margin:.3rem 0;
+}
+.br-score-item{display:flex;flex-direction:column;align-items:center;flex:1;}
+.br-score-label{font-size:.55rem;font-weight:700;letter-spacing:.18em;color:rgba(255,179,204,.5);text-transform:uppercase;margin-bottom:.2rem;}
+.br-score-val{font-family:'Pacifico',cursive;font-size:2rem;color:#fff;line-height:1;}
+.br-score-mine .br-score-val{color:var(--rose);}
+.br-score-opp .br-score-val{color:rgba(180,160,255,.85);}
+.br-score-vs{font-family:'Pacifico',cursive;font-size:.9rem;color:rgba(255,255,255,.25);}
+
+.br-btn-row{display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center;margin-top:.3rem;}
+
+/* ── Battle Toast ── */
+.battle-toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:rgba(30,10,80,.92);border:1px solid rgba(120,100,255,.4);
+  color:rgba(200,190,255,.9);font-family:'Quicksand',sans-serif;
+  font-weight:700;font-size:.75rem;letter-spacing:.1em;
+  padding:.55em 1.4em;border-radius:99px;
+  opacity:0;transition:opacity .3s,transform .3s;
+  pointer-events:none;z-index:70;white-space:nowrap;
+}
+.battle-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Countdown overlay (drawn on canvas — this just keeps the
+      canvas visible during countdown in battle mode) ── */
+#game-wrap.battle-countdown-active{visibility:visible!important;}
