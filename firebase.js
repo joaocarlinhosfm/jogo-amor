@@ -99,6 +99,9 @@ function loginPlayer(name,pin,onSuccess,onError){
 function syncStats(){
   var key=getPlayerKey();
   if(!key||!currentPlayer)return;
+  // Flush in-memory counters to localStorage before reading
+  localStorage.setItem("amandaTotalCoins",totalCoinsEver);
+  localStorage.setItem("amandaTotalObs",totalObstaclesEver);
   var stats={
     best:parseInt(localStorage.getItem("amandaBest")||"0"),
     totalGames:parseInt(localStorage.getItem("amandaTotalGames")||"0"),

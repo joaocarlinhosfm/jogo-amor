@@ -300,6 +300,9 @@ initStars();window.addEventListener("resize",initStars);
 // ── Game globals ──────────────────────────────────────────────
 var canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
 var W,H,scaleF;
+// ── DOM element cache (query once, avoid per-frame getElementById) ──
+var _dom={};
+function _el(id){return _dom[id]||(_dom[id]=document.getElementById(id));}
 var gameState="menu";
 var score=0,obstacleScore=0,coinScore=0;
 var SCORE_PER_OBSTACLE=2,SCORE_PER_COIN=2,EARLY_OBSTACLE_SCORE=1;
@@ -350,7 +353,7 @@ function buildOpponentCache(size){
   c.strokeStyle="rgba(190,180,255,0.45)";c.lineWidth=2.5;c.stroke();
   _opponentCache=oc;_opponentCacheSize=size;
 }
-function drawGhostOpponent(){
+function drawGhostOpponent(ft){
   if(!battleMode)return;
   var sz=ship.w;
   if(!_opponentCache||_opponentCacheSize!==sz)buildOpponentCache(sz);
@@ -363,7 +366,7 @@ function drawGhostOpponent(){
     ctx.rotate(1.1);
     ctx.drawImage(_opponentCache,-sz/2,-sz/2,sz,sz);
   } else {
-    ctx.globalAlpha=0.40+0.08*Math.sin(Date.now()*.004);
+    ctx.globalAlpha=0.40+0.08*Math.sin(ft*.004);
     ctx.drawImage(_opponentCache,ship.x-sz*0.1,ghostY,sz,sz);
     ctx.globalAlpha=0.60;
     ctx.font="bold "+(9*scaleF)+"px 'Quicksand',sans-serif";
@@ -570,6 +573,8 @@ function applyTheme(theme){
   _lastThemeName=theme.name;
   _currentTheme=theme;
   pipeCache={}; // force redraw with new colors
+  _bgGrad1=null;_bgGradTheme=""; // force gradient cache rebuild
+  invalidateBackdrop(); // force backdrop cache rebuild
   // Force all on-screen obstacles to redraw with new theme colors
   for(var i=0;i<obstacles.length;i++){obstacles[i]._pipeKey=null;}
   updateBgFloaters(theme);
@@ -961,9 +966,9 @@ function initGame(){
   totalGames++;
   localStorage.setItem("amandaTotalGames",totalGames);
   buildNoiseBuffer();
-  document.getElementById("scoreDisplay").textContent="0";
-  document.getElementById("bestDisplay").textContent=best;
-  var badge=document.getElementById("newRecordBadge");if(badge)badge.classList.remove("show");
+  _el("scoreDisplay").textContent="0";
+  _el("bestDisplay").textContent=best;
+  var badge=_el("newRecordBadge");if(badge)badge.classList.remove("show");
 }
 
 // ── Draw Amanda ───────────────────────────────────────────────
@@ -975,14 +980,61 @@ function drawAmanda(x,y,w,h,tl,dead){
   ctx.restore();
 }
 
+// ── Background gradient cache (avoid recreating every frame) ──
+var _bgGrad1=null,_bgGrad2=null,_bgGrad3=null,_bgGradTheme="";
+
+// ── Backdrop offscreen cache (draw once, blit every frame) ────
+var _backdropCanvas=null,_backdropCtx=null;
+var _backdropTheme="",_backdropW=0,_backdropH=0;
+function getBackdropCanvas(){
+  if(!_backdropCanvas){
+    _backdropCanvas=document.createElement("canvas");
+    _backdropCtx=_backdropCanvas.getContext("2d");
+  }
+  return _backdropCanvas;
+}
+function invalidateBackdrop(){
+  _backdropTheme=""; // force redraw next frame
+}
+function drawThemeBackdropCached(theme){
+  var bc=getBackdropCanvas();
+  // Rebuild if theme, size, or firefly time bucket changed
+  // For garden we rebuild every ~100ms for firefly animation (6fps is enough)
+  var isAnimated=(theme.backdrop==="garden");
+  var timeBucket=isAnimated?Math.floor(Date.now()/100):0;
+  var needRebuild=(_backdropTheme!==theme.name||_backdropW!==W||_backdropH!==H||
+                   (isAnimated&&_backdropTime!==timeBucket));
+  if(needRebuild){
+    bc.width=W;bc.height=H;
+    _backdropTheme=theme.name;_backdropW=W;_backdropH=H;
+    _backdropTime=timeBucket;
+    // Draw backdrop into offscreen canvas
+    var savedCtx=ctx;
+    ctx=_backdropCtx;
+    ctx.clearRect(0,0,W,H);
+    if(theme.solidBg){ctx.fillStyle=theme.solidBg;ctx.fillRect(0,0,W,H);}
+    if(theme.backdrop==="city")drawCityBackdrop(theme);
+    else if(theme.backdrop==="garden")drawGardenBackdrop(theme);
+    else if(theme.backdrop==="festival")drawFestivalBackdrop(theme);
+    else if(theme.backdrop==="aquarium")drawAquariumBackdrop(theme);
+    else if(theme.backdrop==="desert")drawDesertBackdrop(theme);
+    else if(theme.backdrop==="aurora")drawAuroraBackdrop(theme);
+    ctx=savedCtx;
+  }
+  // Blit — single drawImage instead of full redraw
+  ctx.drawImage(bc,0,0);
+}
+var _backdropTime=0;
+
 // ── Pipe cache ────────────────────────────────────────────────
 var pipeCache={};
 function getPipe(w,h,top,skipCache){
-  var key=(top?"t":"b")+Math.round(w)+","+Math.round(h)+_obstacleTheme.name;
-  if(!skipCache&&pipeCache[key])return pipeCache[key];
+  // Quantize h to 4px steps — moving obstacles get cache hits between frames
+  var hq=Math.round(h/4)*4;
+  var key=(top?"t":"b")+Math.round(w)+","+hq+_obstacleTheme.name;
+  if(pipeCache[key])return pipeCache[key];
   var oc=document.createElement("canvas");oc.width=Math.ceil(w);oc.height=Math.ceil(h)+20;
   var c=oc.getContext("2d");
-  var th=skipCache?_obstacleTheme:_obstacleTheme; // use obstacle theme
   var g=c.createLinearGradient(0,0,w,0);
   g.addColorStop(0,th.pipe[0]);g.addColorStop(.5,th.pipe[1]);g.addColorStop(1,th.pipe[2]);
   c.fillStyle=g;c.beginPath();
@@ -1035,11 +1087,11 @@ function getPipe(w,h,top,skipCache){
     }
   }
   c.globalAlpha=1;
-  if(!skipCache)pipeCache[key]=oc;
+  pipeCache[key]=oc;
   return oc;
 }
 function drawObs(ob){
-  var skip=ob.moving;
+  var skip=false; // always use cache — moving obs use quantized key
   if(ob.topY>0)ctx.drawImage(getPipe(ob.w,ob.topY,true,skip),ob.x,0);
   var bY=ob.topY+ob.gap,bH=H-bY;
   if(bH>0)ctx.drawImage(getPipe(ob.w,bH,false,skip),ob.x,bY);
@@ -1097,8 +1149,8 @@ function drawCoins(spd,dt){
       if(comboMult>bestCombo){bestCombo=comboMult;localStorage.setItem("amandaBestCombo",bestCombo);}
       var pts=comboMult*SCORE_PER_COIN*getScoreBoostMult();
       score+=pts;totalCoinsEver++;
-      localStorage.setItem("amandaTotalCoins",totalCoinsEver);
-      document.getElementById("scoreDisplay").textContent=score;
+      // localStorage synced in syncStats() on game over
+      _el("scoreDisplay").textContent=score;
       checkScoreMilestones();
       sndCoin();spawnH(c.x,c.y,6);
       if(combo>=5)showComboPopup(combo,comboMult,false);
@@ -1112,7 +1164,7 @@ function drawCoins(spd,dt){
 }
 
 // ── Particles ─────────────────────────────────────────────────
-var MAX_PARTICLES=28;
+var MAX_PARTICLES=32;
 function spawnTrail(x,y){
   if(particles.length>MAX_PARTICLES)return;
   var spd=(1.2+Math.random()*1.8)*scaleF;
@@ -1378,9 +1430,9 @@ function drawPowerUps(spd,dt){
 }
 
 // ── Shield & Magnet auras ─────────────────────────────────────
-function drawShieldAura(){
+function drawShieldAura(ft){
   var r=ship.w*.7;
-  var alpha=.35+.15*Math.sin(Date.now()*.005);
+  var alpha=.35+.15*Math.sin(ft*.005);
   ctx.save();
   ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,0,Math.PI*2);
   ctx.strokeStyle="rgba(100,180,255,"+alpha+")";ctx.lineWidth=3*scaleF;ctx.stroke();
@@ -1392,9 +1444,9 @@ function drawShieldAura(){
   ctx.strokeStyle="rgba(100,200,255,.9)";ctx.lineWidth=3*scaleF;ctx.stroke();
   ctx.restore();
 }
-function drawMagnetAura(){
+function drawMagnetAura(ft){
   var r=ship.w*1.8;
-  var alpha=.2+.1*Math.sin(Date.now()*.004);
+  var alpha=.2+.1*Math.sin(ft*.004);
   ctx.save();
   ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,0,Math.PI*2);
   ctx.strokeStyle="rgba(255,45,120,"+alpha+")";ctx.lineWidth=2*scaleF;
@@ -1407,9 +1459,8 @@ function drawMagnetAura(){
   ctx.restore();
 }
 
-function drawStarAura(){
-  var now=Date.now();
-  var t=now*.002;
+function drawStarAura(ft){
+  var t=ft*.002;
   // overlay arco-íris pulsante no canvas inteiro
   var hue=Math.floor((t*40)%360);
   ctx.save();
@@ -1428,7 +1479,7 @@ function drawStarAura(){
   }
   ctx.globalAlpha=1;
   // partículas de estrelinhas esporádicas
-  if(Math.random()<.4)spawnH(ship.x+ship.w/2,ship.y+ship.h/2,3);
+  if(Math.random()<.12)spawnH(ship.x+ship.w/2,ship.y+ship.h/2,2);
   // timer bar branca
   var frac=starTimer/STAR_DURATION;
   ctx.beginPath();ctx.arc(cx,cy,r+5*scaleF,-Math.PI/2,-Math.PI/2+Math.PI*2*frac);
@@ -1436,16 +1487,16 @@ function drawStarAura(){
   ctx.restore();
 }
 
-function drawCloverAura(){
+function drawCloverAura(ft){
   var cx=ship.x+ship.w/2,cy=ship.y+ship.h/2;
   var r=ship.w*.95;
-  var alpha=.3+.12*Math.sin(Date.now()*.006);
+  var alpha=.3+.12*Math.sin(ft*.006);
   ctx.save();
   ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
   ctx.strokeStyle="rgba(90,255,130,"+alpha+")";ctx.lineWidth=3*scaleF;ctx.stroke();
   ctx.strokeStyle="rgba(200,255,210,"+(alpha*.55)+")";ctx.lineWidth=6*scaleF;ctx.stroke();
   for(var i=0;i<4;i++){
-    var a=Date.now()*.002+i*Math.PI/2;
+    var a=ft*.002+i*Math.PI/2;
     ctx.beginPath();
     ctx.arc(cx+Math.cos(a)*r*.72,cy+Math.sin(a)*r*.72,ship.w*.08,0,Math.PI*2);
     ctx.fillStyle="rgba(210,255,220,.55)";ctx.fill();
@@ -1465,8 +1516,8 @@ function drawCloverEndFlash(){
   ctx.restore();
 }
 
-function drawGhostAura(){
-  var now=Date.now();
+function drawGhostAura(ft){
+  var now=ft;
   // nave semi-transparente — feito no drawAmanda com globalAlpha
   // anel violeta dashed
   var r=ship.w*.75;
@@ -1476,7 +1527,7 @@ function drawGhostAura(){
   ctx.strokeStyle="rgba(180,100,255,"+alpha+")";ctx.lineWidth=2*scaleF;
   ctx.setLineDash([5*scaleF,3*scaleF]);ctx.stroke();ctx.setLineDash([]);
   // partículas de brilho roxo esporádicas
-  if(Math.random()<.25)spawnH(ship.x+ship.w/2,ship.y+ship.h/2,2);
+  if(Math.random()<.08)spawnH(ship.x+ship.w/2,ship.y+ship.h/2,2);
   // timer bar
   var frac=ghostTimer/GHOST_DURATION;
   ctx.beginPath();ctx.arc(ship.x+ship.w/2,ship.y+ship.h/2,r,
@@ -1502,7 +1553,7 @@ function drawAnnounce100(){
   ctx.fillStyle="rgba(255,255,255,.8)";ctx.fillText("Atingiste um nível lendário! 💕",0,26*scaleF);
   ctx.restore();
   // spawn party particles
-  if(Math.random()<.3)spawnH(Math.random()*W,Math.random()*H*.5,3);
+  if(Math.random()<.10)spawnH(Math.random()*W,Math.random()*H*.5,2);
 }
 
 // ── Score milestone checks ────────────────────────────────────
@@ -1518,22 +1569,27 @@ function checkScoreMilestones(){
 function gameLoop(ts){
   if(!loopActive)return;
   raf=requestAnimationFrame(gameLoop);
+  var frameTime=Date.now(); // single timestamp for all auras this frame
   ctx.clearRect(0,0,W,H);
   // Themed background
   if(gameState==="playing"||gameState==="dead"){
     var th=_currentTheme;
-    if(th.solidBg)drawThemeBackdrop(th);
-    var bg1=ctx.createRadialGradient(W*.2,H*.3,0,W*.2,H*.3,W*.9);
-    bg1.addColorStop(0,th.bgColors[0]);bg1.addColorStop(1,"transparent");
-    ctx.fillStyle=bg1;ctx.fillRect(0,0,W,H);
-    var bg2=ctx.createRadialGradient(W*.8,H*.7,0,W*.8,H*.7,W*.7);
-    bg2.addColorStop(0,th.bgColors[1]);bg2.addColorStop(1,"transparent");
-    ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
-    if(th.bgColors[2]){
-      var bg3=ctx.createRadialGradient(W*.5,H*.1,0,W*.5,H*.1,W*.6);
-      bg3.addColorStop(0,th.bgColors[2]);bg3.addColorStop(1,"transparent");
-      ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+    if(th.solidBg)drawThemeBackdropCached(th);
+    // Reuse cached gradients — only recreate on theme change or resize
+    if(!_bgGrad1||_bgGradTheme!==th.name){
+      _bgGrad1=ctx.createRadialGradient(W*.2,H*.3,0,W*.2,H*.3,W*.9);
+      _bgGrad1.addColorStop(0,th.bgColors[0]);_bgGrad1.addColorStop(1,"transparent");
+      _bgGrad2=ctx.createRadialGradient(W*.8,H*.7,0,W*.8,H*.7,W*.7);
+      _bgGrad2.addColorStop(0,th.bgColors[1]);_bgGrad2.addColorStop(1,"transparent");
+      if(th.bgColors[2]){
+        _bgGrad3=ctx.createRadialGradient(W*.5,H*.1,0,W*.5,H*.1,W*.6);
+        _bgGrad3.addColorStop(0,th.bgColors[2]);_bgGrad3.addColorStop(1,"transparent");
+      } else { _bgGrad3=null; }
+      _bgGradTheme=th.name;
     }
+    ctx.fillStyle=_bgGrad1;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=_bgGrad2;ctx.fillRect(0,0,W,H);
+    if(_bgGrad3){ctx.fillStyle=_bgGrad3;ctx.fillRect(0,0,W,H);}
   }
   drawCloverEndFlash();
   drawStars(gameReady);
@@ -1576,19 +1632,19 @@ function gameLoop(ts){
     // Magnet timer
     if(magnetActive){magnetTimer-=dt;if(magnetTimer<=0){magnetActive=false;magnetTimer=0;}}
     // Power HUD
-    var sb=document.getElementById("shieldBadge");if(sb)sb.className="pow-badge"+(shieldActive?" active":"");
-    var mb=document.getElementById("magnetBadge");if(mb)mb.className="pow-badge"+(magnetActive?" active":"");
-    var gb=document.getElementById("ghostBadge");if(gb)gb.className="pow-badge"+(ghostActive?" active":"");
-    var stb=document.getElementById("starBadge");if(stb)stb.className="pow-badge"+(starActive?" active":"");
-    var clb=document.getElementById("cloverBadge");if(clb)clb.className="pow-badge"+(cloverActive?" active":"");
+    var sb=_el("shieldBadge");if(sb)sb.className="pow-badge"+(shieldActive?" active":"");
+    var mb=_el("magnetBadge");if(mb)mb.className="pow-badge"+(magnetActive?" active":"");
+    var gb=_el("ghostBadge");if(gb)gb.className="pow-badge"+(ghostActive?" active":"");
+    var stb=_el("starBadge");if(stb)stb.className="pow-badge"+(starActive?" active":"");
+    var clb=_el("cloverBadge");if(clb)clb.className="pow-badge"+(cloverActive?" active":"");
 
     // Combo HUD
-    var cb=document.getElementById("comboBar");
+    var cb=_el("comboBar");
     if(cb){
       if(combo>=5){
         var mult=combo>=10?3:2;
         cb.classList.add("active");
-        var cx=document.getElementById("comboX");
+        var cx=_el("comboX");
         if(cx)cx.textContent="x"+mult+" COMBO";
       }else{cb.classList.remove("active");}
     }
@@ -1598,7 +1654,7 @@ function gameLoop(ts){
     ship.y+=ship.vy*dt;
     var targetTilt=Math.max(-.45,Math.min(.9,ship.vy*.07));
     tilt+=(targetTilt-tilt)*.11*dt;
-    if(Math.random()<.35)spawnTrail(ship.x,ship.y+ship.h*.5);
+    if(Math.random()<.22)spawnTrail(ship.x,ship.y+ship.h*.5);
 
     obstTimer+=dt;
     if(obstTimer>=obstInterval){
@@ -1657,8 +1713,8 @@ function gameLoop(ts){
       if(!ob.scored&&ob.x+ob.w<ship.x){
         ob.scored=true;obstacleScore++;
         score+=getObstacleScoreValue()*getScoreBoostMult();totalObstaclesEver++;
-        localStorage.setItem("amandaTotalObs",totalObstaclesEver);
-        document.getElementById("scoreDisplay").textContent=score;
+        // localStorage synced in syncStats() on game over
+        _el("scoreDisplay").textContent=score;
         checkScoreMilestones();
         sndScore();spawnH(ship.x+ship.w,ship.y+ship.h/2,8);
 
@@ -1694,7 +1750,7 @@ function gameLoop(ts){
     if(hit){
       sndHit();spawnH(ship.x+ship.w/2,ship.y+ship.h/2,14);
       combo=0;comboTimer=0;
-      var gw=document.getElementById("game-wrap");
+      var gw=_el("game-wrap");
       gw.classList.add("shake");
       setTimeout(function(){gw.classList.remove("shake");},400);
       gameState="dead";ship.dead=true;
@@ -1722,7 +1778,7 @@ function gameLoop(ts){
 
     // Ghost: nave semi-transparente com shimmer violeta
     if(ghostActive){
-      ctx.save();ctx.globalAlpha=0.45+0.15*Math.sin(Date.now()*.015);
+      ctx.save();ctx.globalAlpha=0.45+0.15*Math.sin(frameTime*.015);
       drawAmanda(ship.x,ship.y,ship.w,ship.h,tilt,false);
       ctx.restore();
     } else {
@@ -1737,20 +1793,20 @@ function gameLoop(ts){
         ctx.restore();
       }
     }
-    if(shieldActive){drawShieldAura();}
-    if(magnetActive){drawMagnetAura();}
-    if(ghostActive){drawGhostAura();}
-    if(starActive){drawStarAura();}
-    if(cloverActive){drawCloverAura();}
+    if(shieldActive){drawShieldAura(frameTime);}
+    if(magnetActive){drawMagnetAura(frameTime);}
+    if(ghostActive){drawGhostAura(frameTime);}
+    if(starActive){drawStarAura(frameTime);}
+    if(cloverActive){drawCloverAura(frameTime);}
     drawComboPopup();
     drawMsg();
-    drawGhostOpponent();
+    drawGhostOpponent(frameTime);
     drawBattleHud();
 
   }else if(gameState==="dead"){
     for(var i=0;i<obstacles.length;i++)drawObs(obstacles[i]);
     drawAmanda(ship.x,ship.y+5,ship.w,ship.h,1.1,true);
-    drawGhostOpponent();
+    drawGhostOpponent(frameTime);
   }
   drawPart();
 }
@@ -1771,19 +1827,19 @@ function showMenu(){
   if(typeof leaveBattleRoom==="function")leaveBattleRoom();
   if(ctx)ctx.clearRect(0,0,W,H);
   stopMusic();
-  var cb=document.getElementById("comboBar");if(cb)cb.classList.remove("active");
-  var sb=document.getElementById("shieldBadge");if(sb)sb.classList.remove("active");
-  var mb=document.getElementById("magnetBadge");if(mb)mb.classList.remove("active");
-  var gb=document.getElementById("ghostBadge");if(gb)gb.classList.remove("active");
-  var stb=document.getElementById("starBadge");if(stb)stb.classList.remove("active");
-  var clb=document.getElementById("cloverBadge");if(clb)clb.classList.remove("active");
-  var gw=document.getElementById("game-wrap");if(gw)gw.style.visibility="hidden";
+  var cb=_el("comboBar");if(cb)cb.classList.remove("active");
+  var sb=_el("shieldBadge");if(sb)sb.classList.remove("active");
+  var mb=_el("magnetBadge");if(mb)mb.classList.remove("active");
+  var gb=_el("ghostBadge");if(gb)gb.classList.remove("active");
+  var stb=_el("starBadge");if(stb)stb.classList.remove("active");
+  var clb=_el("cloverBadge");if(clb)clb.classList.remove("active");
+  var gw=_el("game-wrap");if(gw)gw.style.visibility="hidden";
   ["gameover","ranking","namePrompt"].forEach(function(id){
     var el=document.getElementById(id);if(el)el.classList.add("hidden");
   });
   var t3=document.getElementById("top3Overlay");if(t3)t3.classList.remove("show");
   document.getElementById("landing").classList.remove("hidden");
-  document.getElementById("hud").classList.remove("visible");
+  _el("hud").classList.remove("visible");
   gameState="menu";loopActive=true;requestAnimationFrame(menuLoop);
 }
 function startGame(opts){
@@ -1807,11 +1863,11 @@ function startGame(opts){
     battleRoomId="";
     clearBattleSeed();
   }
-  var gw=document.getElementById("game-wrap");if(gw)gw.style.visibility="visible";
+  var gw=_el("game-wrap");if(gw)gw.style.visibility="visible";
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("gameover").classList.add("hidden");
   var lobby=document.getElementById("battleLobby");if(lobby)lobby.classList.add("hidden");
-  document.getElementById("hud").classList.add("visible");
+  _el("hud").classList.add("visible");
   initGame();
   // Set countdown AFTER initGame (initGame resets it to 0)
   if(opts&&opts.battle){
@@ -1830,12 +1886,12 @@ function startGame(opts){
 }
 function showGameOver(){
   document.getElementById("gameover").classList.remove("hidden");
-  document.getElementById("hud").classList.remove("visible");
+  _el("hud").classList.remove("visible");
   document.getElementById("goScore").textContent=score;
   document.getElementById("goBest").textContent=best;
   document.getElementById("goAst").textContent=obstacleScore;
   document.getElementById("goCoins").textContent=coinScore;
-  var badge=document.getElementById("newRecordBadge");
+  var badge=_el("newRecordBadge");
   if(badge){if(score>0&&score>=best)badge.classList.add("show");else badge.classList.remove("show");}
 }
 
@@ -1880,5 +1936,5 @@ window.addEventListener("load",function(){
 amandaImg.onload=function(){buildAmandaCache(amandaCacheSize||Math.round(45*H/700)||45);};
 if(amandaImg.complete&&amandaImg.naturalWidth)buildAmandaCache(Math.round(45*H/700)||45);
 resize();
-window.addEventListener("resize",function(){pipeCache={};_coinR=0;_coinImg=null;if(gameState==="playing")initGame();else resize();});
+window.addEventListener("resize",function(){pipeCache={};_coinR=0;_coinImg=null;_bgGrad1=null;_bgGradTheme="";invalidateBackdrop();if(gameState==="playing")initGame();else resize();});
 loopActive=true;requestAnimationFrame(menuLoop);
