@@ -512,6 +512,7 @@ function joinBattleRoom(code, onStart, onResult, onError){
 // ── Listener central da sala ──────────────────────────────────
 function _listenRoom(role, onStart, onResult){
   if(_battleListener){_battleRoomRef.off("value",_battleListener);}
+  var _startFired=false;
   _battleListener=_battleRoomRef.on("value",function(snap){
     if(!snap.exists())return;
     var d=snap.val();
@@ -524,8 +525,9 @@ function _listenRoom(role, onStart, onResult){
       return;
     }
 
-    // Quando guest entra → host recebe "ready" → ambos arrancam
-    if(d.status==="ready"&&!battleMode){
+    // Quando guest entra → status passa a "ready" → ambos arrancam (só uma vez)
+    if(d.status==="ready"&&!_startFired){
+      _startFired=true;
       onStart({role:role, roomId:d.code||snap.key, seed:d.seed});
       return;
     }

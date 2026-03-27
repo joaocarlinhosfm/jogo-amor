@@ -1801,7 +1801,6 @@ function startGame(opts){
     battleRole=opts.role||"A";
     battleRoomId=opts.roomId||"";
     if(opts.seed)setBattleSeed(opts.seed);
-    battleCountdown=180; // 3 seconds @ 60fps
   } else {
     battleMode=false;
     battleRole="";
@@ -1813,7 +1812,12 @@ function startGame(opts){
   document.getElementById("gameover").classList.add("hidden");
   var lobby=document.getElementById("battleLobby");if(lobby)lobby.classList.add("hidden");
   document.getElementById("hud").classList.add("visible");
-  initGame();gameState="playing";loopActive=true;requestAnimationFrame(gameLoop);
+  initGame();
+  // Set countdown AFTER initGame (initGame resets it to 0)
+  if(opts&&opts.battle){
+    battleCountdown=180; // 3 seconds @ 60fps — overrides initGame reset
+  }
+  gameState="playing";loopActive=true;requestAnimationFrame(gameLoop);
   // In battle mode the countdown fires in the loop; music starts after countdown
   if(!battleMode){
     // First time tutorial
