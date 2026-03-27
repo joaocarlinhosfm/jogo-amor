@@ -471,7 +471,12 @@ function createBattleRoom(onWaiting, onStart, onResult, onError){
     _battleRoomRef.child("status").onDisconnect().set("abandoned");
     onWaiting(code);
     _listenRoom("A", onStart, onResult);
-  }).catch(function(e){onError("Erro ao criar sala: "+e.message);});
+  }).catch(function(e){
+    var msg=e.message&&e.message.indexOf("permission")>=0
+      ?"Sem permissão — actualiza as Firebase Rules (ver instruções)"
+      :"Erro ao criar sala: "+e.message;
+    onError(msg);
+  });
 }
 
 // ── Entrar numa sala (guest = Jogador B) ──────────────────────
@@ -496,7 +501,12 @@ function joinBattleRoom(code, onStart, onResult, onError){
       _battleRoomRef.child("status").onDisconnect().set("abandoned");
       _listenRoom("B", onStart, onResult);
     });
-  }).catch(function(e){onError("Erro ao entrar: "+e.message);});
+  }).catch(function(e){
+    var msg=e.message&&e.message.indexOf("permission")>=0
+      ?"Sem permissão — actualiza as Firebase Rules (ver instruções)"
+      :"Erro ao entrar: "+e.message;
+    onError(msg);
+  });
 }
 
 // ── Listener central da sala ──────────────────────────────────

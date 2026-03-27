@@ -392,18 +392,18 @@ html,body{width:100%;height:100%;background:var(--deep);overflow:hidden;font-fam
 }
 .br-divider span{flex:1;height:1px;background:rgba(120,100,255,.25);}
 .br-divider i{font-size:.65rem;font-style:normal;color:rgba(180,160,255,.45);letter-spacing:.1em;}
-.br-input-row{display:flex;gap:.5rem;width:100%;}
+.br-input-row{display:flex;flex-direction:column;gap:.5rem;width:100%;}
 .br-code-input{
-  flex:1;background:rgba(255,255,255,.06);
+  width:100%;background:rgba(255,255,255,.06);
   border:1px solid rgba(120,100,255,.35);
   border-radius:99px;color:#fff;
-  font-family:'Pacifico',cursive;font-size:1.1rem;letter-spacing:.18em;
-  padding:.6em 1em;text-align:center;outline:none;
-  transition:border-color .2s;
+  font-family:'Pacifico',cursive;font-size:1.3rem;letter-spacing:.22em;
+  padding:.65em 1em;text-align:center;outline:none;
+  transition:border-color .2s;box-sizing:border-box;
 }
 .br-code-input:focus{border-color:rgba(160,140,255,.8);}
 .br-code-input::placeholder{color:rgba(180,160,255,.2);font-size:.7rem;font-family:'Quicksand',sans-serif;letter-spacing:.15em;}
-.br-join-btn{padding:.65em 1.2em!important;margin:0!important;flex-shrink:0;font-size:.75rem!important;}
+.br-join-btn{width:100%!important;padding:.75em!important;margin:0!important;font-size:.82rem!important;}
 
 /* Status */
 .br-status{
