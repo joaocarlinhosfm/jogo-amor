@@ -996,6 +996,22 @@ function getBackdropCanvas(){
 function invalidateBackdrop(){
   _backdropTheme=""; // force redraw next frame
 }
+function _drawBackdropTo(bctx,theme){
+  // Temporarily point global ctx at offscreen canvas, then restore.
+  // try/finally guarantees ctx is always restored even if backdrop throws.
+  var _save=ctx;
+  ctx=bctx;
+  try{
+    if(theme.backdrop==="city")drawCityBackdrop(theme);
+    else if(theme.backdrop==="garden")drawGardenBackdrop(theme);
+    else if(theme.backdrop==="festival")drawFestivalBackdrop(theme);
+    else if(theme.backdrop==="aquarium")drawAquariumBackdrop(theme);
+    else if(theme.backdrop==="desert")drawDesertBackdrop(theme);
+    else if(theme.backdrop==="aurora")drawAuroraBackdrop(theme);
+  }finally{
+    ctx=_save;
+  }
+}
 function drawThemeBackdropCached(theme){
   var bc=getBackdropCanvas();
   // Rebuild if theme, size, or firefly time bucket changed
@@ -1008,18 +1024,11 @@ function drawThemeBackdropCached(theme){
     bc.width=W;bc.height=H;
     _backdropTheme=theme.name;_backdropW=W;_backdropH=H;
     _backdropTime=timeBucket;
-    // Draw backdrop into offscreen canvas
-    var savedCtx=ctx;
-    ctx=_backdropCtx;
-    ctx.clearRect(0,0,W,H);
-    if(theme.solidBg){ctx.fillStyle=theme.solidBg;ctx.fillRect(0,0,W,H);}
-    if(theme.backdrop==="city")drawCityBackdrop(theme);
-    else if(theme.backdrop==="garden")drawGardenBackdrop(theme);
-    else if(theme.backdrop==="festival")drawFestivalBackdrop(theme);
-    else if(theme.backdrop==="aquarium")drawAquariumBackdrop(theme);
-    else if(theme.backdrop==="desert")drawDesertBackdrop(theme);
-    else if(theme.backdrop==="aurora")drawAuroraBackdrop(theme);
-    ctx=savedCtx;
+    // Draw directly into offscreen context — never touch global ctx
+    var bctx=_backdropCtx;
+    bctx.clearRect(0,0,W,H);
+    if(theme.solidBg){bctx.fillStyle=theme.solidBg;bctx.fillRect(0,0,W,H);}
+    _drawBackdropTo(bctx,theme);
   }
   // Blit — single drawImage instead of full redraw
   ctx.drawImage(bc,0,0);
